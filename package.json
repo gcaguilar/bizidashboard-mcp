@@ -1,0 +1,32 @@
+{
+  "name": "bizidashboard-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing BiziDashboard's historical and analytical bike-share data (Zaragoza Bizi) as tools for LLM clients.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "bizidashboard-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test --experimental-strip-types test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}
