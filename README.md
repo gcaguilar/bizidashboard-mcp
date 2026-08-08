@@ -10,17 +10,30 @@ that analytical layer easy to query from Claude Desktop or any other MCP client.
 
 ## Installation
 
-This package is not published to npm yet. Clone it and point your MCP client at the
-built entrypoint:
+Published on npm — no cloning or compiling required. Add it to your MCP client config
+(e.g. `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "bizidashboard": {
+      "command": "npx",
+      "args": ["-y", "bizidashboard-mcp"]
+    }
+  }
+}
+```
+
+### From source
 
 ```bash
-git clone <this-repo> bizidashboard-mcp
+git clone https://github.com/gcaguilar/bizidashboard-mcp.git
 cd bizidashboard-mcp
 npm install
 npm run build
 ```
 
-Then add it to your MCP client config (e.g. `claude_desktop_config.json`):
+Then point your MCP client at the built entrypoint:
 
 ```json
 {
