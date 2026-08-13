@@ -9,6 +9,13 @@ import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
 
+function getCorsOrigins(): string[] {
+  return (process.env.MCP_CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+}
+
 function newMcpServer(): McpServer {
   const server = new McpServer({ name: 'bizidashboard-mcp', version: '0.1.0' })
   for (const tool of tools) {
@@ -23,6 +30,22 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // first proxy so req.protocol and generated public URLs remain HTTPS.
   app.set('trust proxy', 1)
   app.use(express.json())
+
+  const corsOrigins = getCorsOrigins()
+  app.use((req, res, next) => {
+    const origin = req.get('origin')
+    if (!origin) return next()
+    if (!corsOrigins.includes(origin)) {
+      return res.status(403).json({ error: 'Origin not allowed' })
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Mcp-Session-Id')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Vary', 'Origin')
+    if (req.method === 'OPTIONS') return res.sendStatus(204)
+    next()
+  })
 
   // OAuth metadata: advertises this server as an OAuth protected resource using Auth0 as authorization server
   const auth0Domain = process.env.AUTH0_DOMAIN

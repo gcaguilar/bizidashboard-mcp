@@ -1,8 +1,8 @@
 import { jwtVerify, createRemoteJWKSet } from 'jose'
 import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/providers/proxyProvider.js'
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js'
-import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
-import { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js'
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
+import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js'
 
 function requireEnv(key: string): string {
   const val = process.env[key]
@@ -11,7 +11,7 @@ function requireEnv(key: string): string {
 }
 
 export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): string[] {
-  const configured = env.AUTH0_AUDIENCES || env.AUTH0_AUDIENCE || ''
+  const configured = env.AUTH0_AUDIENCES || (env.NODE_ENV === 'production' ? '' : env.AUTH0_AUDIENCE || '')
   const audiences = configured.split(',').map((audience) => audience.trim()).filter(Boolean)
   if (audiences.length === 0) {
     throw new Error('Missing required environment variable: AUTH0_AUDIENCES')
@@ -19,11 +19,19 @@ export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): strin
   return audiences
 }
 
+export function getAllowedClientIds(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.AUTH0_CLIENT_IDS ?? '')
+    .split(',')
+    .map((clientId) => clientId.trim())
+    .filter(Boolean)
+}
+
 export type JwksSource = Parameters<typeof jwtVerify>[1]
 
 export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyOAuthServerProvider {
   const auth0Domain = requireEnv('AUTH0_DOMAIN')
   const auth0Audiences = getAllowedAudiences()
+  const allowedClientIds = getAllowedClientIds()
   const jwksUrl = `https://${auth0Domain}/.well-known/jwks.json`
   const issuer = `https://${auth0Domain}/`
 
@@ -34,17 +42,27 @@ export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyO
       const verified = await jwtVerify(token, jwks, {
         issuer,
         audience: auth0Audiences,
+        algorithms: ['RS256'],
       })
 
-      const clientId = verified.payload.sub || verified.payload.client_id
-      if (!clientId || typeof clientId !== 'string') {
+      const tokenClientId = typeof verified.payload.azp === 'string'
+        ? verified.payload.azp
+        : typeof verified.payload.client_id === 'string'
+          ? verified.payload.client_id
+          : null
+      if (allowedClientIds.length > 0 && (!tokenClientId || !allowedClientIds.includes(tokenClientId))) {
+        throw new Error('Token client is not allowed')
+      }
+
+      const clientId = verified.payload.sub || tokenClientId
+      if (typeof clientId !== 'string' || !clientId) {
         throw new Error('Token missing sub or client_id claim')
       }
 
       const scopes = typeof verified.payload.scope === 'string'
         ? verified.payload.scope.split(/\s+/).filter(Boolean)
         : Array.isArray(verified.payload.scope)
-          ? verified.payload.scope
+          ? verified.payload.scope.filter((scope): scope is string => typeof scope === 'string')
           : []
       if (!scopes.includes('read')) throw new Error('Token missing required read scope')
 

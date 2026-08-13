@@ -61,3 +61,23 @@ test('rejects a correctly signed token without read scope', async () => {
   await assert.rejects(provider.verifyAccessToken(token), /Token verification failed/)
   process.env = original
 })
+
+test('can restrict accepted tokens to configured Auth0 clients', async () => {
+  const original = { ...process.env }
+  process.env.AUTH0_DOMAIN = 'auth.example.test'
+  process.env.AUTH0_AUDIENCES = audience
+  process.env.AUTH0_CLIENT_IDS = 'datosbizi-web'
+  const { privateKey, jwks } = await createToken()
+  const token = await new SignJWT({ scope: 'read', azp: 'datosbizi-web' })
+    .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+    .setSubject('user@example.com')
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(privateKey)
+  const provider = createOAuthProvider({ jwks })
+
+  await provider.verifyAccessToken(token)
+  process.env = original
+})
