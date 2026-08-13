@@ -72,11 +72,16 @@ Then point your MCP client at the built entrypoint:
 | `AUTH0_DOMAIN` | **Required.** Your Auth0 tenant domain, e.g., `example.auth0.com`. |
 | `AUTH0_AUDIENCES` | **Required.** Comma-separated Auth0 API identifiers accepted by the MCP, e.g., `https://api.datosbizi.com`. Tokens must also include the `read` scope. |
 | `AUTH0_AUDIENCE` | Legacy singular alias for `AUTH0_AUDIENCES`. |
-| `AUTH0_CLIENT_IDS` | Optional comma-separated Auth0 client IDs. When set, tokens must contain a matching `azp` or `client_id`. |
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
+| `AUTH0_CLIENT_IDS` | _(optional)_ Comma-separated Auth0 `azp` client IDs allowed to call the MCP. Set this in production. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
+
+In production, `BASE_URL` is required and must be the HTTPS MCP URL. Set
+`BIZI_ALLOWED_API_HOSTS` to an explicit comma-separated allowlist (normally
+`datosbizi.com`) so authenticated tokens are never forwarded to an unintended
+origin.
 
 For local authenticated use, enable Device Authorization for the DatosBizi Auth0
 application and run `bizidashboard-mcp-login` with `AUTH0_DOMAIN`,

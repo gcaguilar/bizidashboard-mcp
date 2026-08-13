@@ -1,3 +1,6 @@
+import { readTokens, writeTokens } from './token-store.js'
+import { requestToken } from './request-context.js'
+
 const DEFAULT_BASE_URL = 'https://datosbizi.com'
 const DEFAULT_TIMEOUT_MS = 15_000
 
@@ -13,11 +16,47 @@ export class BiziApiError extends Error {
 }
 
 function getBaseUrl(): string {
-  return (process.env.BIZI_API_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
+  const base = new URL(process.env.BIZI_API_BASE_URL ?? DEFAULT_BASE_URL)
+  const allowed = (process.env.BIZI_ALLOWED_API_HOSTS ?? 'datosbizi.com').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean)
+  if (base.protocol !== 'https:' || !allowed.includes(base.hostname.toLowerCase())) throw new Error('BIZI_API_BASE_URL must be an HTTPS URL with an allowed host')
+  return base.toString().replace(/\/+$/, '')
 }
 
 function getPublicApiKey(): string | null {
   return process.env.BIZI_PUBLIC_API_KEY ?? null
+}
+
+async function getAccessToken(): Promise<string | null> {
+  const accessToken = requestToken() ?? process.env.BIZI_ACCESS_TOKEN
+  if (accessToken) return accessToken
+  const tokens = await readTokens()
+  if (!tokens) return null
+  if (!tokens.expires_at || tokens.expires_at > Date.now() + 30_000) return tokens.access_token
+
+  const domain = process.env.AUTH0_DOMAIN
+  const clientId = process.env.AUTH0_CLIENT_ID
+  const audience = process.env.AUTH0_AUDIENCE
+  if (!tokens.refresh_token || !domain || !clientId || !audience) return tokens.access_token
+  const response = await fetch(`https://${domain}/oauth/token`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId, audience }),
+  })
+  if (!response.ok) return tokens.access_token
+  const payload = await response.json() as Record<string, unknown>
+  const refreshed = {
+    access_token: String(payload.access_token),
+    refresh_token: payload.refresh_token ? String(payload.refresh_token) : tokens.refresh_token,
+    expires_at: payload.expires_in ? Date.now() + Number(payload.expires_in) * 1000 : undefined,
+  }
+  await writeTokens(refreshed)
+  return refreshed.access_token
+}
+
+async function addAuthHeaders(headers: Record<string, string>): Promise<void> {
+  const accessToken = await getAccessToken()
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+  const installationId = process.env.BIZI_INSTALLATION_ID
+  if (installationId) headers['X-Installation-Id'] = installationId
 }
 
 export type QueryParams = Record<string, string | number | boolean | undefined>
@@ -41,6 +80,7 @@ export async function fetchJson<T>(route: string, params: QueryParams = {}): Pro
   const headers: Record<string, string> = { Accept: 'application/json' }
   const apiKey = getPublicApiKey()
   if (apiKey) headers['X-Public-Api-Key'] = apiKey
+  await addAuthHeaders(headers)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
@@ -87,6 +127,7 @@ export async function fetchCsv(route: string, params: QueryParams = {}): Promise
   const headers: Record<string, string> = { Accept: 'text/csv' }
   const apiKey = getPublicApiKey()
   if (apiKey) headers['X-Public-Api-Key'] = apiKey
+  await addAuthHeaders(headers)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)

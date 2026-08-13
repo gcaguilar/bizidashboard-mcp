@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "bin": {
     "bizidashboard-mcp": "dist/index.js",
-    "bizidashboard-mcp-http": "dist/http-index.js"
+    "bizidashboard-mcp-http": "dist/http-index.js",
+    "bizidashboard-mcp-login": "dist/login.js"
   },
   "files": [
     "dist"
@@ -31,7 +32,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "start:http": "node dist/http-index.js",
-    "test": "npm run build && node --test --experimental-strip-types test/*.test.ts",
+    "test": "npm run build && node --test --test-concurrency=1 --experimental-strip-types test/oauth.test.ts test/tools.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "license": "GPL-3.0-or-later",

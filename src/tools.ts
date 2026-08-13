@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { BiziApiError } from './client.js'
 import { operations, type OperationResult } from './operations.js'
+import { withRequestToken } from './request-context.js'
+import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js'
+import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js'
 
 export type ToolTextResult = {
   content: [{ type: 'text'; text: string }]
@@ -21,7 +24,7 @@ export type ToolDefinition = {
   name: string
   description: string
   schema: z.ZodRawShape
-  handler: (args: Record<string, unknown>) => Promise<ToolTextResult>
+  handler: (args: Record<string, unknown>, extra?: RequestHandlerExtra<ServerRequest, ServerNotification>) => Promise<ToolTextResult>
 }
 
 /**
@@ -32,11 +35,11 @@ export const tools: ToolDefinition[] = operations.map((operation) => ({
   name: operation.name,
   description: operation.description,
   schema: operation.schema,
-  handler: async (args) => {
+  handler: async (args: Record<string, unknown>, extra?: RequestHandlerExtra<ServerRequest, ServerNotification>) => withRequestToken(extra?.authInfo?.token, async () => {
     try {
       return toToolTextResult(await operation.run(args))
     } catch (error) {
       return errorResult(error)
     }
-  },
+  }),
 }))

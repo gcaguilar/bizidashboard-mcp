@@ -8,6 +8,7 @@ import { operations } from './operations.js'
 import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
+import { withRequestToken } from './request-context.js'
 
 function getCorsOrigins(): string[] {
   return (process.env.MCP_CORS_ORIGINS ?? '')
@@ -29,7 +30,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // Coolify/Cloudflare terminate TLS before forwarding to Express. Trust the
   // first proxy so req.protocol and generated public URLs remain HTTPS.
   app.set('trust proxy', 1)
-  app.use(express.json())
+  app.use(express.json({ limit: '1mb' }))
 
   const corsOrigins = getCorsOrigins()
   app.use((req, res, next) => {
@@ -52,7 +53,9 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
 
   const resourceServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
+  if (process.env.NODE_ENV === 'production' && resourceServerUrl.protocol !== 'https:') throw new Error('BASE_URL must use HTTPS in production')
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceServerUrl)
+  const publicBaseUrl = resourceServerUrl.origin
 
   const oauthProvider = options.oauthProvider ?? createOAuthProvider()
   const bearerAuthMiddleware = requireBearerAuth({
@@ -80,8 +83,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   }))
 
   app.get('/openapi.json', (req, res) => {
-    const serverUrl = `${req.protocol}://${req.get('host')}`
-    res.json(buildOpenApiDocument(serverUrl))
+    res.json(buildOpenApiDocument(publicBaseUrl))
   })
 
   app.get('/healthz', (_req, res) => res.status(200).send('ok'))
@@ -106,7 +108,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   for (const operation of operations) {
     app.get(`/actions/${operation.restPath}`, bearerAuthMiddleware, async (req, res) => {
       try {
-        const result = await operation.run(req.query as Record<string, unknown>)
+        const result = await withRequestToken(req.auth?.token, () => operation.run(req.query as Record<string, unknown>))
         if (result.kind === 'csv') {
           res.type('text/csv').send(result.text)
         } else {
