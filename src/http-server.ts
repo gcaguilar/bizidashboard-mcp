@@ -17,8 +17,11 @@ function newMcpServer(): McpServer {
   return server
 }
 
-export function createHttpServer() {
+export function createHttpServer(options: { oauthProvider?: ReturnType<typeof createOAuthProvider> } = {}) {
   const app = express()
+  // Coolify/Cloudflare terminate TLS before forwarding to Express. Trust the
+  // first proxy so req.protocol and generated public URLs remain HTTPS.
+  app.set('trust proxy', 1)
   app.use(express.json())
 
   // OAuth metadata: advertises this server as an OAuth protected resource using Auth0 as authorization server
@@ -28,9 +31,10 @@ export function createHttpServer() {
   const resourceServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceServerUrl)
 
-  const oauthProvider = createOAuthProvider()
+  const oauthProvider = options.oauthProvider ?? createOAuthProvider()
   const bearerAuthMiddleware = requireBearerAuth({
     verifier: oauthProvider,
+    requiredScopes: ['read'],
     resourceMetadataUrl,
   })
 

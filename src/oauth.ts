@@ -10,19 +10,30 @@ function requireEnv(key: string): string {
   return val
 }
 
-export function createOAuthProvider(): ProxyOAuthServerProvider {
+export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): string[] {
+  const configured = env.AUTH0_AUDIENCES || env.AUTH0_AUDIENCE || ''
+  const audiences = configured.split(',').map((audience) => audience.trim()).filter(Boolean)
+  if (audiences.length === 0) {
+    throw new Error('Missing required environment variable: AUTH0_AUDIENCES')
+  }
+  return audiences
+}
+
+export type JwksSource = Parameters<typeof jwtVerify>[1]
+
+export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyOAuthServerProvider {
   const auth0Domain = requireEnv('AUTH0_DOMAIN')
-  const auth0Audience = requireEnv('AUTH0_AUDIENCE')
+  const auth0Audiences = getAllowedAudiences()
   const jwksUrl = `https://${auth0Domain}/.well-known/jwks.json`
   const issuer = `https://${auth0Domain}/`
 
-  const jwks = createRemoteJWKSet(new URL(jwksUrl))
+  const jwks = options.jwks ?? createRemoteJWKSet(new URL(jwksUrl))
 
   async function verifyAccessToken(token: string): Promise<AuthInfo> {
     try {
       const verified = await jwtVerify(token, jwks, {
         issuer,
-        audience: auth0Audience,
+        audience: auth0Audiences,
       })
 
       const clientId = verified.payload.sub || verified.payload.client_id
@@ -31,10 +42,11 @@ export function createOAuthProvider(): ProxyOAuthServerProvider {
       }
 
       const scopes = typeof verified.payload.scope === 'string'
-        ? verified.payload.scope.split(' ')
+        ? verified.payload.scope.split(/\s+/).filter(Boolean)
         : Array.isArray(verified.payload.scope)
           ? verified.payload.scope
           : []
+      if (!scopes.includes('read')) throw new Error('Token missing required read scope')
 
       return {
         token,

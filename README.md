@@ -54,6 +54,7 @@ Then point your MCP client at the built entrypoint:
 | --- | --- | --- |
 | `BIZI_API_BASE_URL` | `https://datosbizi.com` | Base URL of the BiziDashboard instance to query. Override to point at another city's deployment or a local dev server. |
 | `BIZI_PUBLIC_API_KEY` | _(none)_ | `X-Public-Api-Key` sent on every request. Only required for elevated calls (CSV exports on `get_alerts_history`/`get_rebalancing_report`, or wide `days`/`limit` windows on those two tools). Everything else works anonymously. |
+| `BIZI_ACCESS_TOKEN` | _(none)_ | Optional Auth0 access token forwarded to DatosBizi. `BIZI_INSTALLATION_ID` is forwarded when set. |
 
 ### HTTP Server & OAuth (inbound, remote clients only)
 
@@ -69,10 +70,17 @@ Then point your MCP client at the built entrypoint:
 | Variable | Purpose |
 | --- | --- |
 | `AUTH0_DOMAIN` | **Required.** Your Auth0 tenant domain, e.g., `example.auth0.com`. |
-| `AUTH0_AUDIENCE` | **Required.** The Auth0 API identifier (resource server), e.g., `https://mcp.yourdomain.com`. |
+| `AUTH0_AUDIENCES` | **Required.** Comma-separated Auth0 API identifiers accepted by the MCP, e.g., `https://api.datosbizi.com`. Tokens must also include the `read` scope. |
+| `AUTH0_AUDIENCE` | Legacy singular alias for `AUTH0_AUDIENCES`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
+
+For local authenticated use, enable Device Authorization for the DatosBizi Auth0
+application and run `bizidashboard-mcp-login` with `AUTH0_DOMAIN`,
+`AUTH0_CLIENT_ID` and `AUTH0_AUDIENCE`. It stores tokens in
+`~/.config/bizidashboard-mcp/tokens.json`; the stdio server refreshes them when a
+refresh token is available. Set `BIZI_TOKEN_FILE` to override that path.
 
 ### Stdio Server (Claude Desktop, no auth needed)
 
@@ -125,7 +133,7 @@ docker run -d \
   --name bizidashboard-mcp \
   -p 8787:8787 \
   -e AUTH0_DOMAIN=<your-auth0-domain> \
-  -e AUTH0_AUDIENCE=<your-api-identifier> \
+  -e AUTH0_AUDIENCES=https://api.datosbizi.com \
   -e AUTH0_CLIENT_ID=<your-app-client-id> \
   -e BASE_URL=https://mcp.yourdomain.com \
   ghcr.io/gcaguilar/bizidashboard-mcp:latest
@@ -137,7 +145,7 @@ docker run -d \
 npm install
 npm run build
 AUTH0_DOMAIN=<your-auth0-domain> \
-  AUTH0_AUDIENCE=<your-api-identifier> \
+AUTH0_AUDIENCES=https://api.datosbizi.com \
   AUTH0_CLIENT_ID=<your-app-client-id> \
   npm run start:http
 ```
