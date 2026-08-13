@@ -11,7 +11,9 @@ function requireEnv(key: string): string {
 }
 
 export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): string[] {
-  const configured = env.AUTH0_AUDIENCES || (env.NODE_ENV === 'production' ? '' : env.AUTH0_AUDIENCE || '')
+  // Keep the singular name fully compatible with existing Coolify deployments;
+  // AUTH0_AUDIENCES is preferred when both are present.
+  const configured = env.AUTH0_AUDIENCES || env.AUTH0_AUDIENCE || ''
   const audiences = configured.split(',').map((audience) => audience.trim()).filter(Boolean)
   if (audiences.length === 0) {
     throw new Error('Missing required environment variable: AUTH0_AUDIENCES')
