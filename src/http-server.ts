@@ -4,11 +4,11 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { mcpAuthMetadataRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js'
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
 import { BiziApiError } from './client.js'
-import { operations } from './operations.js'
+import { BiziAuthorizationError, DASHBOARD_SCOPE, operations, runOperation } from './operations.js'
 import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
-import { withRequestToken } from './request-context.js'
+import { withRequestAuthorization } from './request-context.js'
 
 function getCorsOrigins(): string[] {
   return (process.env.MCP_CORS_ORIGINS ?? '')
@@ -60,7 +60,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   const oauthProvider = options.oauthProvider ?? createOAuthProvider()
   const bearerAuthMiddleware = requireBearerAuth({
     verifier: oauthProvider,
-    requiredScopes: ['read'],
+    requiredScopes: [DASHBOARD_SCOPE],
     resourceMetadataUrl,
   })
 
@@ -108,14 +108,18 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   for (const operation of operations) {
     app.get(`/actions/${operation.restPath}`, bearerAuthMiddleware, async (req, res) => {
       try {
-        const result = await withRequestToken(req.auth?.token, () => operation.run(req.query as Record<string, unknown>))
+        const result = await withRequestAuthorization({
+          token: req.auth?.token,
+          scopes: req.auth?.scopes,
+          remote: true,
+        }, () => runOperation(operation, req.query as Record<string, unknown>))
         if (result.kind === 'csv') {
           res.type('text/csv').send(result.text)
         } else {
           res.json(result.data)
         }
       } catch (error) {
-        if (error instanceof BiziApiError) {
+        if (error instanceof BiziApiError || error instanceof BiziAuthorizationError) {
           res.status(error.status ?? 502).json({ error: error.message })
         } else {
           res.status(500).json({ error: `Unexpected error: ${String(error)}` })

@@ -1,5 +1,5 @@
 import { readTokens, writeTokens } from './token-store.js'
-import { requestToken } from './request-context.js'
+import { requestAuthorization } from './request-context.js'
 
 const DEFAULT_BASE_URL = 'https://datosbizi.com'
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -23,11 +23,17 @@ function getBaseUrl(): string {
 }
 
 function getPublicApiKey(): string | null {
+  // Remote MCP/Actions calls are authorized solely as the bearer-token user.
+  // Never let a deployment-wide key silently elevate that user.
+  if (requestAuthorization()?.remote) return null
   return process.env.BIZI_PUBLIC_API_KEY ?? null
 }
 
 async function getAccessToken(): Promise<string | null> {
-  const accessToken = requestToken() ?? process.env.BIZI_ACCESS_TOKEN
+  const authorization = requestAuthorization()
+  if (authorization?.remote) return authorization.token ?? null
+
+  const accessToken = authorization?.token ?? process.env.BIZI_ACCESS_TOKEN
   if (accessToken) return accessToken
   const tokens = await readTokens()
   if (!tokens) return null
@@ -73,7 +79,8 @@ function buildQueryString(params: QueryParams): string {
 
 /**
  * GET a JSON endpoint on the BiziDashboard public API.
- * Always forwards X-Public-Api-Key when configured; harmless on routes that don't require it.
+ * Local stdio mode can optionally send X-Public-Api-Key for backwards compatibility.
+ * Remote MCP/Actions mode always forwards only the original user bearer token.
  */
 export async function fetchJson<T>(route: string, params: QueryParams = {}): Promise<T> {
   const url = `${getBaseUrl()}${route}${buildQueryString(params)}`
@@ -109,11 +116,7 @@ export async function fetchJson<T>(route: string, params: QueryParams = {}): Pro
     } catch {
       // ignore body read failures on error paths
     }
-    const hint =
-      response.status === 401 || response.status === 403
-        ? ' (this request may require BIZI_PUBLIC_API_KEY to be configured)'
-        : ''
-    throw new BiziApiError(`${route} returned ${response.status} ${response.statusText}${hint}${detail}`, response.status, route)
+    throw new BiziApiError(`${route} returned ${response.status} ${response.statusText}${detail}`, response.status, route)
   }
 
   return (await response.json()) as T
@@ -149,11 +152,7 @@ export async function fetchCsv(route: string, params: QueryParams = {}): Promise
   }
 
   if (!response.ok) {
-    const hint =
-      response.status === 401 || response.status === 403
-        ? ' (this request may require BIZI_PUBLIC_API_KEY to be configured)'
-        : ''
-    throw new BiziApiError(`${route} returned ${response.status} ${response.statusText}${hint}`, response.status, route)
+    throw new BiziApiError(`${route} returned ${response.status} ${response.statusText}`, response.status, route)
   }
 
   return response.text()

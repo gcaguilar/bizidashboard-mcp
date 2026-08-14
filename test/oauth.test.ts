@@ -11,7 +11,7 @@ async function createToken(overrides: { aud?: string; scope?: string } = {}) {
   const jwk = await exportJWK(publicKey)
   jwk.kid = 'test-key'
   const jwks = createLocalJWKSet({ keys: [jwk] })
-  const token = await new SignJWT({ scope: overrides.scope ?? 'read' })
+  const token = await new SignJWT({ scope: overrides.scope ?? 'read:dashboard' })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
     .setSubject('user@example.com')
     .setIssuer(issuer)
@@ -27,7 +27,7 @@ test('parses comma-separated audiences and legacy singular configuration', () =>
   assert.deepEqual(getAllowedAudiences({ AUTH0_AUDIENCE: 'legacy' }), ['legacy'])
 })
 
-test('verifies a token signed by Auth0 with the configured audience and read scope', async () => {
+test('verifies a token signed by Auth0 with the configured audience and read:dashboard scope', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
   process.env.AUTH0_AUDIENCES = audience
@@ -36,7 +36,7 @@ test('verifies a token signed by Auth0 with the configured audience and read sco
 
   const auth = await provider.verifyAccessToken(token)
   assert.equal(auth.clientId, 'user@example.com')
-  assert.deepEqual(auth.scopes, ['read'])
+  assert.deepEqual(auth.scopes, ['read:dashboard'])
   process.env = original
 })
 
@@ -51,11 +51,11 @@ test('rejects a token with another audience', async () => {
   process.env = original
 })
 
-test('rejects a correctly signed token without read scope', async () => {
+test('rejects a correctly signed token without read:dashboard scope', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
   process.env.AUTH0_AUDIENCES = audience
-  const { token, jwks } = await createToken({ scope: 'profile email' })
+  const { token, jwks } = await createToken({ scope: 'profile email read:exports' })
   const provider = createOAuthProvider({ jwks })
 
   await assert.rejects(provider.verifyAccessToken(token), /Token verification failed/)
@@ -68,7 +68,7 @@ test('can restrict accepted tokens to configured Auth0 clients', async () => {
   process.env.AUTH0_AUDIENCES = audience
   process.env.AUTH0_CLIENT_IDS = 'datosbizi-web'
   const { privateKey, jwks } = await createToken()
-  const token = await new SignJWT({ scope: 'read', azp: 'datosbizi-web' })
+  const token = await new SignJWT({ scope: 'read:dashboard', azp: 'datosbizi-web' })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
     .setSubject('user@example.com')
     .setIssuer(issuer)

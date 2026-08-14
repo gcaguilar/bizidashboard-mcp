@@ -32,7 +32,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "start:http": "node dist/http-index.js",
-    "test": "npm run build && node --test --test-concurrency=1 --experimental-strip-types test/oauth.test.ts test/tools.test.ts",
+    "test": "npm run build && node --test --test-concurrency=1 --experimental-strip-types test/oauth.test.ts test/authorization.test.ts test/tools.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "license": "GPL-3.0-or-later",

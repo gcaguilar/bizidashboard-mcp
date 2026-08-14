@@ -1,7 +1,19 @@
 import { z } from 'zod'
 import { fetchCsv, fetchJson, type QueryParams } from './client.js'
+import { requestAuthorization } from './request-context.js'
 
 export type OperationResult = { kind: 'json'; data: unknown } | { kind: 'csv'; text: string }
+export const DASHBOARD_SCOPE = 'read:dashboard'
+export const EXPORTS_SCOPE = 'read:exports'
+
+export class BiziAuthorizationError extends Error {
+  readonly status = 403
+
+  constructor(public readonly requiredScope: string) {
+    super(`This operation requires the ${requiredScope} scope. Reconnect and grant ${requiredScope} access, then try again.`)
+    this.name = 'BiziAuthorizationError'
+  }
+}
 
 async function jsonOrCsv<T>(route: string, format: 'json' | 'csv' | undefined, params: QueryParams): Promise<OperationResult> {
   if (format === 'csv') {
@@ -18,7 +30,27 @@ export type OperationDefinition = {
   schema: z.ZodRawShape
   /** REST path segment served under /actions, e.g. "stations". */
   restPath: string
+  /** Additional scope needed only for expensive variants of this operation. */
+  requiredScopes?: (args: Record<string, unknown>) => string[]
   run: (args: Record<string, unknown>) => Promise<OperationResult>
+}
+
+export function getRequiredScopes(operation: OperationDefinition, args: Record<string, unknown>): string[] {
+  return [DASHBOARD_SCOPE, ...(operation.requiredScopes?.(args) ?? [])]
+}
+
+/**
+ * Enforce scopes only for remote bearer calls. Local stdio remains backwards
+ * compatible with its optional key/token configuration until it is migrated.
+ */
+export async function runOperation(operation: OperationDefinition, args: Record<string, unknown>): Promise<OperationResult> {
+  const authorization = requestAuthorization()
+  if (authorization?.remote) {
+    for (const scope of getRequiredScopes(operation, args)) {
+      if (!authorization.scopes?.includes(scope)) throw new BiziAuthorizationError(scope)
+    }
+  }
+  return operation.run(args)
 }
 
 export const operations: OperationDefinition[] = [
@@ -75,7 +107,7 @@ export const operations: OperationDefinition[] = [
   {
     name: 'get_alerts_history',
     description:
-      'Query historical alerts (resolved and active) with filters by station, alert type, severity, and time range. This is the tool for "how often has station X run out of bikes" style questions. Requesting format=csv or a limit above 500 rows requires BIZI_PUBLIC_API_KEY to be configured.',
+      'Query historical alerts (resolved and active) with filters by station, alert type, severity, and time range. This is the tool for "how often has station X run out of bikes" style questions. Remote CSV exports and requests above 500 rows require the read:exports scope.',
     schema: {
       state: z.enum(['all', 'active', 'resolved']).optional().describe('Filter by alert state. Defaults to all.'),
       stationId: z.string().optional().describe('Filter by a specific station id.'),
@@ -92,14 +124,18 @@ export const operations: OperationDefinition[] = [
         .min(1)
         .max(2000)
         .optional()
-        .describe('Rows per page. Defaults to 200. Values above 500 require BIZI_PUBLIC_API_KEY.'),
+        .describe('Rows per page. Defaults to 200. Remote values above 500 require read:exports.'),
       offset: z.number().int().min(0).max(20000).optional().describe('Pagination offset. Defaults to 0.'),
       format: z
         .enum(['json', 'csv'])
         .optional()
-        .describe('Response format. csv requires BIZI_PUBLIC_API_KEY. Defaults to json.'),
+        .describe('Response format. Remote CSV exports require read:exports. Defaults to json.'),
     },
     restPath: 'alerts-history',
+    requiredScopes: (args) =>
+      args.format === 'csv' || (typeof args.limit === 'number' && args.limit > 500)
+        ? [EXPORTS_SCOPE]
+        : [],
     run: (args) =>
       jsonOrCsv('/api/alerts/history', args.format as 'json' | 'csv' | undefined, {
         state: args.state as string | undefined,
@@ -184,7 +220,7 @@ export const operations: OperationDefinition[] = [
   {
     name: 'get_rebalancing_report',
     description:
-      'Get the station rebalancing diagnostic report: per-station classification (overstock, deficit, peak saturation, peak emptying, balanced, data_review), 1h/3h empty/full risk predictions, and origin-destination bike transfer recommendations. Optionally filter by district/barrio. Requesting format=csv or a days window above 30 requires BIZI_PUBLIC_API_KEY to be configured.',
+      'Get the station rebalancing diagnostic report: per-station classification (overstock, deficit, peak saturation, peak emptying, balanced, data_review), 1h/3h empty/full risk predictions, and origin-destination bike transfer recommendations. Optionally filter by district/barrio. Remote CSV exports and windows above 30 days require the read:exports scope.',
     schema: {
       district: z.string().optional().describe('Filter by barrio/district name, e.g. "Centro" or "Delicias".'),
       days: z
@@ -193,13 +229,17 @@ export const operations: OperationDefinition[] = [
         .min(1)
         .max(90)
         .optional()
-        .describe('Analysis window in days. Defaults to 15. Values above 30 require BIZI_PUBLIC_API_KEY.'),
+        .describe('Analysis window in days. Defaults to 15. Remote values above 30 require read:exports.'),
       format: z
         .enum(['json', 'csv'])
         .optional()
-        .describe('Response format. csv requires BIZI_PUBLIC_API_KEY. Defaults to json.'),
+        .describe('Response format. Remote CSV exports require read:exports. Defaults to json.'),
     },
     restPath: 'rebalancing-report',
+    requiredScopes: (args) =>
+      args.format === 'csv' || (typeof args.days === 'number' && args.days > 30)
+        ? [EXPORTS_SCOPE]
+        : [],
     run: (args) =>
       jsonOrCsv('/api/rebalancing-report', args.format as 'json' | 'csv' | undefined, {
         district: args.district as string | undefined,

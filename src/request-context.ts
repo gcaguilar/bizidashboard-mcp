@@ -1,5 +1,23 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-const storage = new AsyncLocalStorage<string | undefined>()
-export function withRequestToken<T>(token: string | undefined, callback: () => T): T { return storage.run(token, callback) }
-export function requestToken(): string | undefined { return storage.getStore() }
+export type RequestAuthorization = {
+  /** The original bearer token supplied by the remote MCP/Actions client. */
+  token?: string
+  /** Scopes verified by the OAuth middleware. */
+  scopes?: string[]
+  /**
+   * Remote requests must never inherit local credentials such as
+   * BIZI_PUBLIC_API_KEY or a token stored by the stdio login flow.
+   */
+  remote: boolean
+}
+
+const storage = new AsyncLocalStorage<RequestAuthorization | undefined>()
+
+export function withRequestAuthorization<T>(authorization: RequestAuthorization, callback: () => T): T {
+  return storage.run(authorization, callback)
+}
+
+export function requestAuthorization(): RequestAuthorization | undefined {
+  return storage.getStore()
+}

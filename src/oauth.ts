@@ -66,7 +66,9 @@ export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyO
         : Array.isArray(verified.payload.scope)
           ? verified.payload.scope.filter((scope): scope is string => typeof scope === 'string')
           : []
-      if (!scopes.includes('read')) throw new Error('Token missing required read scope')
+      if (!scopes.includes('read:dashboard')) {
+        throw new Error('Token missing required read:dashboard scope')
+      }
 
       return {
         token,

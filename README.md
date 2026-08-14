@@ -53,8 +53,8 @@ Then point your MCP client at the built entrypoint:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BIZI_API_BASE_URL` | `https://datosbizi.com` | Base URL of the BiziDashboard instance to query. Override to point at another city's deployment or a local dev server. |
-| `BIZI_PUBLIC_API_KEY` | _(none)_ | `X-Public-Api-Key` sent on every request. Only required for elevated calls (CSV exports on `get_alerts_history`/`get_rebalancing_report`, or wide `days`/`limit` windows on those two tools). Everything else works anonymously. |
-| `BIZI_ACCESS_TOKEN` | _(none)_ | Optional Auth0 access token forwarded to DatosBizi. `BIZI_INSTALLATION_ID` is forwarded when set. |
+| `BIZI_PUBLIC_API_KEY` | _(none)_ | **Local stdio only.** Optional legacy `X-Public-Api-Key` for elevated local calls. It is never sent by the remote HTTP MCP/Actions server. |
+| `BIZI_ACCESS_TOKEN` | _(none)_ | Optional local stdio Auth0 access token forwarded to DatosBizi. Remote HTTP requests forward their incoming bearer token instead. `BIZI_INSTALLATION_ID` is forwarded when set. |
 
 ### HTTP Server & OAuth (inbound, remote clients only)
 
@@ -70,7 +70,7 @@ Then point your MCP client at the built entrypoint:
 | Variable | Purpose |
 | --- | --- |
 | `AUTH0_DOMAIN` | **Required.** Your Auth0 tenant domain, e.g., `example.auth0.com`. |
-| `AUTH0_AUDIENCES` | **Required.** Comma-separated Auth0 API identifiers accepted by the MCP, e.g., `https://api.datosbizi.com`. Tokens must also include the `read` scope. |
+| `AUTH0_AUDIENCES` | **Required.** Comma-separated Auth0 API identifiers accepted by the MCP, e.g., `https://api.datosbizi.com`. Tokens must include `read:dashboard`; `read:exports` enables elevated exports and heavy queries. |
 | `AUTH0_AUDIENCE` | Legacy singular alias for `AUTH0_AUDIENCES`. |
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
@@ -101,17 +101,18 @@ The stdio server (`bizidashboard-mcp`) needs no authentication.
 | `get_stations` | Latest availability snapshot for every station. |
 | `get_rankings` | Rank stations by turnover or availability. |
 | `get_alerts` | Currently active low-bikes/low-anchors alerts. |
-| `get_alerts_history` | Filterable/paginated alert history. `format=csv` or `limit>500` needs `BIZI_PUBLIC_API_KEY`. |
+| `get_alerts_history` | Filterable/paginated alert history. Remote `format=csv` or `limit>500` requires `read:exports`. |
 | `get_patterns` | Weekday/weekend hourly occupancy pattern for one station. |
 | `get_heatmap` | Occupancy heatmap cells for one station. |
 | `get_mobility` | Hourly/daily mobility signals and transit impact. |
 | `get_history` | Full historical daily demand data since first record. |
-| `get_rebalancing_report` | Station diagnostics (A–F classification), risk predictions, and transfer recommendations. `format=csv` or `days>30` needs `BIZI_PUBLIC_API_KEY`. |
+| `get_rebalancing_report` | Station diagnostics (A–F classification), risk predictions, and transfer recommendations. Remote `format=csv` or `days>30` requires `read:exports`. |
 
-Every tool returns the API's JSON response as-is (or CSV text when `format: "csv"` is
-requested); nothing is summarized or transformed. Errors from the underlying API
-(bad params, rate limits, missing key) surface as MCP tool errors with the original
-status and message.
+Every tool remains visible to every authenticated remote user. Every tool returns the
+API's JSON response as-is (or CSV text when `format: "csv"` is requested); nothing is
+summarized or transformed. An elevated request without `read:exports` returns an
+actionable authorization error telling the user to reconnect with that scope. Other
+upstream errors (bad params, rate limits) retain their original status and message.
 
 ## Remote connector & Custom Actions (Claude / ChatGPT / Gemini)
 
@@ -129,6 +130,10 @@ operations three ways:
 
 Every route except `/openapi.json` and `/healthz` requires an OAuth bearer token
 (Authorization Code flow with Auth0), obtained after registering as described above.
+The remote server validates issuer, audience, signature, expiry, `azp` (when
+configured), and `read:dashboard`; it forwards that original bearer token to
+BiziDashboard. It never substitutes `BIZI_PUBLIC_API_KEY`, so authorization and rate
+limits can remain tied to the authenticated user.
 
 ### Run it on your own server
 
@@ -185,6 +190,6 @@ npm test            # build, then run integration tests against the live public 
 
 To build the Docker image locally: `docker build -t bizidashboard-mcp .`
 
-Tests hit `https://datosbizi.com` for real — there are no mocks. A couple of tests are
-skipped automatically if `BIZI_PUBLIC_API_KEY` is not set, since they'd otherwise
-require a real elevated-access key to assert success.
+The existing tool smoke tests hit `https://datosbizi.com` for real. Focused
+authorization tests use no live credentials and verify that remote HTTP requests never
+send `BIZI_PUBLIC_API_KEY`.

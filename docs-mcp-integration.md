@@ -23,8 +23,15 @@ BIZI_ALLOWED_API_HOSTS=datosbizi.com
 ```
 
 The remote server validates the JWT signature against Auth0 JWKS, issuer,
-audience, expiry, allowed client (`azp`, when configured), and `read` scope.
-The validated token is forwarded only to the allowlisted DatosBizi API host.
+audience, expiry, allowed client (`azp`, when configured), and `read:dashboard`
+scope. The validated original token is forwarded only to the allowlisted DatosBizi API
+host. `read:exports` is additionally required for remote CSV exports of alert history
+and rebalancing reports, alert-history requests above 500 rows, and rebalancing windows
+above 30 days.
+
+`BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
+HTTP requests to `/mcp` and `/actions/*` never send it upstream, even if it is present
+in the deployment environment. Those requests act solely as the bearer-token user.
 
 ## Remote clients
 
@@ -32,6 +39,10 @@ The web page at `datosbizi.com/developers` should link users to the official
 custom-connector flow for each AI client and show the remote URL above. The
 web page must not receive or store the AI client's OAuth tokens. The AI client
 performs OAuth with Auth0 and sends its bearer token to the MCP.
+
+Keep all tools available in the remote client. If a user requests an elevated variant
+without `read:exports`, the MCP returns a clear 403/error explaining that they must
+reconnect and grant `read:exports`; it does not silently substitute a shared API key.
 
 ## Local clients
 
@@ -61,4 +72,6 @@ curl -fsS https://mcp.datosbizi.com/openapi.json
 ```
 
 Then use an actual DatosBizi access token to run `initialize`, `tools/list`, and
-one `tools/call`. Never paste the complete token into logs or issue trackers.
+one `tools/call`. Verify a `read:dashboard` token succeeds for a basic tool and gets a
+clear authorization error for an elevated request, then verify `read:exports` succeeds
+for that request. Never paste the complete token into logs or issue trackers.

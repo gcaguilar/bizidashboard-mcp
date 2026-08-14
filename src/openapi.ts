@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { operations } from './operations.js'
+import { DASHBOARD_SCOPE, EXPORTS_SCOPE, operations } from './operations.js'
 
 export type OpenApiDocument = Record<string, unknown>
 
@@ -25,6 +25,9 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
       get: {
         operationId: operation.name,
         summary: operation.description,
+        description: operation.requiredScopes
+          ? `${operation.description} Expensive variants require the ${EXPORTS_SCOPE} scope; basic requests require ${DASHBOARD_SCOPE}.`
+          : `${operation.description} Requires the ${DASHBOARD_SCOPE} scope.`,
         parameters: Object.entries(operation.schema).map(([name, field]) => toParameter(name, field)),
         responses: {
           '200': {
@@ -33,6 +36,7 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
           },
           '400': { description: 'Invalid parameters.' },
           '401': { description: 'Missing or invalid OAuth bearer token.' },
+          '403': { description: `Missing ${DASHBOARD_SCOPE} or ${EXPORTS_SCOPE} for this request variant.` },
           '502': { description: 'Upstream BiziDashboard API error.' },
         },
       },
@@ -48,7 +52,7 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
       version: '0.1.0',
     },
     servers: [{ url: serverUrl }],
-    security: [{ oauth2: ['read'] }],
+    security: [{ oauth2: [DASHBOARD_SCOPE] }],
     components: {
       securitySchemes: {
         oauth2: {
@@ -58,7 +62,8 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
               authorizationUrl: `https://${process.env.AUTH0_DOMAIN || 'example.auth0.com'}/authorize`,
               tokenUrl: `https://${process.env.AUTH0_DOMAIN || 'example.auth0.com'}/oauth/token`,
               scopes: {
-                read: 'Read access to protected resources',
+                [DASHBOARD_SCOPE]: 'Read standard BiziDashboard data and analytics.',
+                [EXPORTS_SCOPE]: 'Read CSV exports and expensive historical/rebalancing queries.',
               },
             },
           },

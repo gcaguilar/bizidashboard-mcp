@@ -82,13 +82,13 @@ test('get_rebalancing_report returns diagnostics for the default window', async 
   assert.ok(data.diagnostics === undefined || Array.isArray(data.diagnostics) || typeof data === 'object')
 })
 
-test('get_rebalancing_report over the elevated days threshold fails clearly without a key', async () => {
+test('get_rebalancing_report over the elevated days threshold fails clearly without a local key', async () => {
   if (process.env.BIZI_PUBLIC_API_KEY) {
     return // skip: a key is configured in this environment, so the elevated call would succeed
   }
   const result = await getTool('get_rebalancing_report').handler({ days: 60 })
   assert.equal(result.isError, true)
-  assert.match(result.content[0].text, /BIZI_PUBLIC_API_KEY|401|503/i)
+  assert.match(result.content[0].text, /401|403|503/i)
 })
 
 test('unknown route error surfaces a BiziApiError-shaped message', async () => {
