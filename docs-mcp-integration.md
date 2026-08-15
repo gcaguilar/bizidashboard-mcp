@@ -18,6 +18,8 @@ AUTH0_DOMAIN=<DatosBizi Auth0 tenant>
 AUTH0_AUDIENCES=<exact token audience>
 AUTH0_CLIENT_IDS=<comma-separated azp values used by approved clients>
 BASE_URL=https://mcp.datosbizi.com
+# Required for ChatGPT Actions; this hostname must route to this same MCP service.
+OAUTH_PROXY_ORIGIN=https://auth.datosbizi.com
 PORT=80
 BIZI_ALLOWED_API_HOSTS=datosbizi.com
 ```

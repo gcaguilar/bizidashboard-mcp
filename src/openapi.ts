@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import { DASHBOARD_SCOPE, EXPORTS_SCOPE, operations } from './operations.js'
+import { getOAuthEndpoints } from './oauth-proxy.js'
 
 export type OpenApiDocument = Record<string, unknown>
 
@@ -19,6 +20,7 @@ function toParameter(name: string, field: z.ZodTypeAny) {
  */
 export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
   const paths: Record<string, unknown> = {}
+  const oauthEndpoints = getOAuthEndpoints()
 
   for (const operation of operations) {
     paths[`/actions/${operation.restPath}`] = {
@@ -59,8 +61,8 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
           type: 'oauth2',
           flows: {
             authorizationCode: {
-              authorizationUrl: `https://${process.env.AUTH0_DOMAIN || 'example.auth0.com'}/authorize`,
-              tokenUrl: `https://${process.env.AUTH0_DOMAIN || 'example.auth0.com'}/oauth/token`,
+              authorizationUrl: oauthEndpoints.authorizationUrl,
+              tokenUrl: oauthEndpoints.tokenUrl,
               scopes: {
                 [DASHBOARD_SCOPE]: 'Read standard BiziDashboard data and analytics.',
                 [EXPORTS_SCOPE]: 'Read CSV exports and expensive historical/rebalancing queries.',

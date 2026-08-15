@@ -8,6 +8,7 @@ import { BiziAuthorizationError, DASHBOARD_SCOPE, operations, runOperation } fro
 import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
+import { attachOAuthProxy, getOAuthEndpoints } from './oauth-proxy.js'
 import { withRequestAuthorization } from './request-context.js'
 
 function getCorsOrigins(): string[] {
@@ -31,6 +32,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // first proxy so req.protocol and generated public URLs remain HTTPS.
   app.set('trust proxy', 1)
   app.use(express.json({ limit: '1mb' }))
+  attachOAuthProxy(app)
 
   const corsOrigins = getCorsOrigins()
   app.use((req, res, next) => {
@@ -51,6 +53,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // OAuth metadata: advertises this server as an OAuth protected resource using Auth0 as authorization server
   const auth0Domain = process.env.AUTH0_DOMAIN
   if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
+  const oauthEndpoints = getOAuthEndpoints()
 
   const resourceServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
   if (process.env.NODE_ENV === 'production' && resourceServerUrl.protocol !== 'https:') throw new Error('BASE_URL must use HTTPS in production')
@@ -67,9 +70,9 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: {
       issuer: `https://${auth0Domain}/`,
-      authorization_endpoint: `https://${auth0Domain}/authorize`,
-      token_endpoint: `https://${auth0Domain}/oauth/token`,
-      revocation_endpoint: `https://${auth0Domain}/oauth/revoke`,
+      authorization_endpoint: oauthEndpoints.authorizationUrl,
+      token_endpoint: oauthEndpoints.tokenUrl,
+      revocation_endpoint: oauthEndpoints.revocationUrl,
       jwks_uri: `https://${auth0Domain}/.well-known/jwks.json`,
       introspection_endpoint: `https://${auth0Domain}/oauth/introspect`,
       grant_types_supported: ['authorization_code', 'refresh_token'],

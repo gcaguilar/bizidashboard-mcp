@@ -75,6 +75,7 @@ Then point your MCP client at the built entrypoint:
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
 | `AUTH0_CLIENT_IDS` | _(optional)_ Comma-separated Auth0 `azp` client IDs allowed to call the MCP. Set this in production. |
+| `OAUTH_PROXY_ORIGIN` | _(optional)_ HTTPS origin such as `https://auth.datosbizi.com` that proxies Auth0 OAuth endpoints. Required for ChatGPT Actions because its OAuth and API URLs must share a root domain. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
 
