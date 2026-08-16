@@ -69,11 +69,15 @@ export function attachOAuthProxy(app: Express, options: { fetchImpl?: FetchLike 
       if (contentType) headers.set('content-type', contentType)
       if (authorization) headers.set('authorization', authorization)
       headers.set('accept', req.get('accept') ?? 'application/json')
+      const isForm = contentType?.split(';', 1)[0].trim() === 'application/x-www-form-urlencoded'
+      const body = isForm
+        ? new URLSearchParams(req.body as Record<string, string>).toString()
+        : JSON.stringify(req.body ?? {})
 
       const upstreamResponse = await fetchImpl(upstream, {
         method: 'POST',
         headers,
-        body: JSON.stringify(req.body ?? {}),
+        body,
       })
       copyResponseHeaders(upstreamResponse.headers, res)
       return res.status(upstreamResponse.status).send(Buffer.from(await upstreamResponse.arrayBuffer()))

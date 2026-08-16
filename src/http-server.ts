@@ -32,6 +32,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // first proxy so req.protocol and generated public URLs remain HTTPS.
   app.set('trust proxy', 1)
   app.use(express.json({ limit: '1mb' }))
+  app.use(express.urlencoded({ extended: false, limit: '1mb' }))
   attachOAuthProxy(app)
 
   const corsOrigins = getCorsOrigins()
