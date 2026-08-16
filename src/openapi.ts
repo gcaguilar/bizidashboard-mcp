@@ -21,20 +21,27 @@ function toParameter(name: string, field: z.ZodTypeAny) {
 export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
   const paths: Record<string, unknown> = {}
   const oauthEndpoints = getOAuthEndpoints()
+  const responseSchema = {
+    type: 'object',
+    properties: {},
+    additionalProperties: true,
+  }
 
   for (const operation of operations) {
+    const summary = operation.description.slice(0, 300)
+    const description = (operation.requiredScopes
+      ? `${operation.description} Expensive variants require the ${EXPORTS_SCOPE} scope; basic requests require ${DASHBOARD_SCOPE}.`
+      : `${operation.description} Requires the ${DASHBOARD_SCOPE} scope.`).slice(0, 300)
     paths[`/actions/${operation.restPath}`] = {
       get: {
         operationId: operation.name,
-        summary: operation.description,
-        description: operation.requiredScopes
-          ? `${operation.description} Expensive variants require the ${EXPORTS_SCOPE} scope; basic requests require ${DASHBOARD_SCOPE}.`
-          : `${operation.description} Requires the ${DASHBOARD_SCOPE} scope.`,
+        summary,
+        description,
         parameters: Object.entries(operation.schema).map(([name, field]) => toParameter(name, field)),
         responses: {
           '200': {
             description: 'Successful response.',
-            content: { 'application/json': { schema: { type: 'object' } } },
+            content: { 'application/json': { schema: responseSchema } },
           },
           '400': { description: 'Invalid parameters.' },
           '401': { description: 'Missing or invalid OAuth bearer token.' },
@@ -56,6 +63,7 @@ export function buildOpenApiDocument(serverUrl: string): OpenApiDocument {
     servers: [{ url: serverUrl }],
     security: [{ oauth2: [DASHBOARD_SCOPE] }],
     components: {
+      schemas: {},
       securitySchemes: {
         oauth2: {
           type: 'oauth2',
