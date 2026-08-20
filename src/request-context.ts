@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 export type RequestAuthorization = {
-  /** The original bearer token supplied by the remote MCP/Actions client. */
+  /** The original bearer token supplied by the remote MCP client. */
   token?: string
   /** Scopes verified by the OAuth middleware. */
   scopes?: string[]

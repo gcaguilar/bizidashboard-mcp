@@ -6,8 +6,7 @@
   "main": "dist/index.js",
   "bin": {
     "bizidashboard-mcp": "dist/index.js",
-    "bizidashboard-mcp-http": "dist/http-index.js",
-    "bizidashboard-mcp-login": "dist/login.js"
+    "bizidashboard-mcp-http": "dist/http-index.js"
   },
   "files": [
     "dist"
@@ -43,8 +42,7 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "express": "^5.1.0",
     "jose": "^6.2.8",
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.24.1"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

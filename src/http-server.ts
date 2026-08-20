@@ -1,15 +1,12 @@
-import express, { type Request, type Response } from 'express'
+import express from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { mcpAuthMetadataRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js'
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
-import { BiziApiError } from './client.js'
-import { BiziAuthorizationError, DASHBOARD_SCOPE, operations, runOperation } from './operations.js'
+import { DASHBOARD_SCOPE } from './operations.js'
 import { tools } from './tools.js'
-import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
 import { getOAuthServerMetadata } from './oauth-proxy.js'
-import { withRequestAuthorization } from './request-context.js'
 
 function getCorsOrigins(): string[] {
   return (process.env.MCP_CORS_ORIGINS ?? '')
@@ -21,7 +18,11 @@ function getCorsOrigins(): string[] {
 function newMcpServer(): McpServer {
   const server = new McpServer({ name: 'bizidashboard-mcp', version: '0.1.0' })
   for (const tool of tools) {
-    server.registerTool(tool.name, { description: tool.description, inputSchema: tool.schema }, tool.handler)
+    server.registerTool(tool.name, {
+      description: tool.description,
+      inputSchema: tool.schema,
+      annotations: tool.annotations,
+    }, tool.handler)
   }
   return server
 }
@@ -60,8 +61,6 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // happens to be served. Claude validates this against the connector URL.
   const resourceServerUrl = new URL('/mcp', publicServerUrl)
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceServerUrl)
-  const publicBaseUrl = publicServerUrl.origin
-
   const oauthProvider = options.oauthProvider ?? createOAuthProvider()
   const bearerAuthMiddleware = requireBearerAuth({
     verifier: oauthProvider,
@@ -76,10 +75,6 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     resourceServerUrl,
     resourceName: 'BiziDashboard MCP Server',
   }))
-
-  app.get('/openapi.json', (req, res) => {
-    res.json(buildOpenApiDocument(publicBaseUrl))
-  })
 
   app.get('/healthz', (_req, res) => res.status(200).send('ok'))
 
@@ -99,29 +94,6 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   app.get('/mcp', bearerAuthMiddleware, (_req, res) => {
     res.status(405).json({ error: 'Method not allowed. This server runs in stateless mode; POST JSON-RPC requests to /mcp.' })
   })
-
-  for (const operation of operations) {
-    app.get(`/actions/${operation.restPath}`, bearerAuthMiddleware, async (req, res) => {
-      try {
-        const result = await withRequestAuthorization({
-          token: req.auth?.token,
-          scopes: req.auth?.scopes,
-          remote: true,
-        }, () => runOperation(operation, req.query as Record<string, unknown>))
-        if (result.kind === 'csv') {
-          res.type('text/csv').send(result.text)
-        } else {
-          res.json(result.data)
-        }
-      } catch (error) {
-        if (error instanceof BiziApiError || error instanceof BiziAuthorizationError) {
-          res.status(error.status ?? 502).json({ error: error.message })
-        } else {
-          res.status(500).json({ error: `Unexpected error: ${String(error)}` })
-        }
-      }
-    })
-  }
 
   return app
 }

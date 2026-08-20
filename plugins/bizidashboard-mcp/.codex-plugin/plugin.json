@@ -1,0 +1,27 @@
+{
+  "name": "bizidashboard-mcp",
+  "version": "0.1.0",
+  "description": "Historical and analytical Zaragoza Bizi data for ChatGPT and Codex.",
+  "author": {
+    "name": "BiziDashboard",
+    "url": "https://datosbizi.com"
+  },
+  "homepage": "https://datosbizi.com",
+  "repository": "https://github.com/gcaguilar/bizidashboard-mcp",
+  "license": "GPL-3.0-or-later",
+  "keywords": ["bizi", "zaragoza", "bike-share", "analytics"],
+  "interface": {
+    "displayName": "BiziDashboard",
+    "shortDescription": "Analyze Zaragoza Bizi stations and historical demand.",
+    "longDescription": "Query station availability, alerts, occupancy patterns, mobility signals, history, and rebalancing diagnostics for Zaragoza Bizi.",
+    "developerName": "BiziDashboard",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "defaultPrompt": [
+      "Which Bizi Zaragoza stations have the most bikes available?",
+      "Show occupancy patterns for a Bizi station.",
+      "Summarize the current Bizi Zaragoza alerts."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

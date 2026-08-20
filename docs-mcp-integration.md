@@ -42,7 +42,7 @@ a different client for each connector installation. Do not configure the old OAu
 proxy (`OAUTH_PROXY_ORIGIN`) or static audience lists on this deployment.
 
 `BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
-HTTP requests to `/mcp` and `/actions/*` never send it upstream, even if it is present
+HTTP requests to `/mcp` never send it upstream, even if it is present
 in the deployment environment. Those requests act solely as the signed-in bearer-token
 user through an audience-specific OBO token.
 
@@ -87,7 +87,6 @@ After redeploying, verify:
 ```bash
 curl -fsS https://mcp.datosbizi.com/healthz
 curl -fsS https://mcp.datosbizi.com/.well-known/oauth-protected-resource
-curl -fsS https://mcp.datosbizi.com/openapi.json
 ```
 
 Then use an actual DatosBizi access token to run `initialize`, `tools/list`, and

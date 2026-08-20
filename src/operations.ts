@@ -28,8 +28,6 @@ export type OperationDefinition = {
   name: string
   description: string
   schema: z.ZodRawShape
-  /** REST path segment served under /actions, e.g. "stations". */
-  restPath: string
   /** Additional scope needed only for expensive variants of this operation. */
   requiredScopes?: (args: Record<string, unknown>) => string[]
   run: (args: Record<string, unknown>) => Promise<OperationResult>
@@ -61,7 +59,6 @@ export const operations: OperationDefinition[] = [
     schema: {
       format: z.enum(['json', 'csv']).optional().describe('Response format. Defaults to json.'),
     },
-    restPath: 'stations',
     run: (args) => jsonOrCsv('/api/stations', args.format as 'json' | 'csv' | undefined, {}),
   },
   {
@@ -79,7 +76,6 @@ export const operations: OperationDefinition[] = [
         .describe('Maximum number of stations to return. Defaults to 20.'),
       format: z.enum(['json', 'csv']).optional().describe('Response format. Defaults to json.'),
     },
-    restPath: 'rankings',
     run: (args) =>
       jsonOrCsv('/api/rankings', args.format as 'json' | 'csv' | undefined, {
         type: args.type as string,
@@ -98,7 +94,6 @@ export const operations: OperationDefinition[] = [
         .optional()
         .describe('Maximum number of alerts to return. Defaults to 50.'),
     },
-    restPath: 'alerts',
     run: async (args) => ({
       kind: 'json',
       data: await fetchJson('/api/alerts', { limit: args.limit as number | undefined }),
@@ -131,7 +126,6 @@ export const operations: OperationDefinition[] = [
         .optional()
         .describe('Response format. Remote CSV exports require read:exports. Defaults to json.'),
     },
-    restPath: 'alerts-history',
     requiredScopes: (args) =>
       args.format === 'csv' || (typeof args.limit === 'number' && args.limit > 500)
         ? [EXPORTS_SCOPE]
@@ -154,7 +148,6 @@ export const operations: OperationDefinition[] = [
     schema: {
       stationId: z.string().describe('Station identifier.'),
     },
-    restPath: 'patterns',
     run: async (args) => ({
       kind: 'json',
       data: await fetchJson('/api/patterns', { stationId: args.stationId as string }),
@@ -166,7 +159,6 @@ export const operations: OperationDefinition[] = [
     schema: {
       stationId: z.string().describe('Station identifier.'),
     },
-    restPath: 'heatmap',
     run: async (args) => ({
       kind: 'json',
       data: await fetchJson('/api/heatmap', { stationId: args.stationId as string }),
@@ -197,7 +189,6 @@ export const operations: OperationDefinition[] = [
         .optional()
         .describe('Optional specific month to inspect, formatted YYYY-MM.'),
     },
-    restPath: 'mobility',
     run: async (args) => ({
       kind: 'json',
       data: await fetchJson('/api/mobility', {
@@ -214,7 +205,6 @@ export const operations: OperationDefinition[] = [
     schema: {
       format: z.enum(['json', 'csv']).optional().describe('Response format. Defaults to json.'),
     },
-    restPath: 'history',
     run: (args) => jsonOrCsv('/api/history', args.format as 'json' | 'csv' | undefined, {}),
   },
   {
@@ -235,7 +225,6 @@ export const operations: OperationDefinition[] = [
         .optional()
         .describe('Response format. Remote CSV exports require read:exports. Defaults to json.'),
     },
-    restPath: 'rebalancing-report',
     requiredScopes: (args) =>
       args.format === 'csv' || (typeof args.days === 'number' && args.days > 30)
         ? [EXPORTS_SCOPE]

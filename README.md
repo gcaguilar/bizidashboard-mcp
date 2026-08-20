@@ -53,7 +53,7 @@ Then point your MCP client at the built entrypoint:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `BIZI_API_BASE_URL` | `https://datosbizi.com` | Base URL of the BiziDashboard instance to query. Override to point at another city's deployment or a local dev server. |
-| `BIZI_PUBLIC_API_KEY` | _(none)_ | **Local stdio only.** Optional legacy `X-Public-Api-Key` for elevated local calls. It is never sent by the remote HTTP MCP/Actions server. |
+| `BIZI_PUBLIC_API_KEY` | _(none)_ | **Local stdio only.** Optional legacy `X-Public-Api-Key` for elevated local calls. It is never sent by the remote HTTP MCP server. |
 | `BIZI_ACCESS_TOKEN` | _(none)_ | Optional local stdio Auth0 access token forwarded to DatosBizi. `BIZI_INSTALLATION_ID` is forwarded when set. |
 
 ### HTTP Server & OAuth (inbound, remote clients only)
@@ -123,21 +123,18 @@ summarized or transformed. An elevated request without `read:exports` returns an
 actionable authorization error telling the user to reconnect with that scope. Other
 upstream errors (bad params, rate limits) retain their original status and message.
 
-## Remote connector & Custom Actions (Claude / ChatGPT / Gemini)
+## Remote connector (Claude / ChatGPT)
 
 `npx bizidashboard-mcp` (stdio) only works for local clients like Claude
-Desktop. To use this data from **claude.ai remote connectors**, **ChatGPT
-Custom GPT Actions**, or **Gemini Gem/Extension Actions**, run the HTTP
-server instead and expose it publicly over HTTPS. It serves the same 9
-operations three ways:
+Desktop. To use this data from **claude.ai remote connectors** or **ChatGPT**,
+run the HTTP server instead and expose it publicly over HTTPS. It exposes the
+same nine tools through one standard MCP endpoint:
 
 | Endpoint | Protocol | Used by |
 | --- | --- | --- |
-| `POST /mcp` | MCP Streamable HTTP (stateless) | Claude remote connectors |
-| `GET /actions/*` | Plain REST, one route per tool | ChatGPT Custom Actions, Gemini Actions |
-| `GET /openapi.json` | OpenAPI 3.1 spec describing the routes above | GPT/Gem Action builders |
+| `POST /mcp` | MCP Streamable HTTP (stateless) | Claude and ChatGPT |
 
-Every route except `/openapi.json` and `/healthz` requires an OAuth bearer token
+Every route except `/healthz` requires an OAuth bearer token
 (Authorization Code flow with Auth0), obtained after registering as described above.
 The remote server validates issuer, MCP audience, signature, expiry, `azp` (when
 configured), and `read:dashboard`. It then performs an Auth0 On-Behalf-Of exchange,
@@ -177,7 +174,7 @@ MCP_AUTH0_CLIENT_SECRET=<obo-client-secret> \
 
 Either way, put it behind a reverse proxy (Caddy, nginx, Traefik, …) on your
 VPS to terminate TLS on a real domain — `https://mcp.yourdomain.com` — since
-none of the three clients below will call a plain-HTTP or self-signed endpoint.
+neither client below will call a plain-HTTP or self-signed endpoint.
 
 ### Register it
 
@@ -187,9 +184,14 @@ none of the three clients below will call a plain-HTTP or self-signed endpoint.
 - **ChatGPT MCP / GPT builder**: use the MCP URL and let the client complete
   OAuth through Dynamic Client Registration. Do not embed the OBO client secret
   in ChatGPT or in a public page.
-- **Gemini (Gem/Extension → Actions → Import OpenAPI schema)**: same
-  `https://mcp.yourdomain.com/openapi.json`, OAuth 2.0 authentication with your
-  Auth0 endpoints.
+
+### OpenAI plugin submission
+
+The MCP-only plugin package is in `plugins/bizidashboard-mcp`. It includes the
+directory metadata and starter prompts for ChatGPT/Codex. Submission copy and
+review cases are in [`docs/openai-plugin-submission.md`](docs/openai-plugin-submission.md).
+The public submission still needs a verified OpenAI publisher identity, legal
+URLs, regional availability, and OAuth reviewer credentials.
 
 ## Development
 
@@ -197,7 +199,7 @@ none of the three clients below will call a plain-HTTP or self-signed endpoint.
 npm run build       # compile TypeScript to dist/ (both the stdio and HTTP entrypoints)
 npm run typecheck   # type-check without emitting
 npm test            # build, then run integration tests against the live public API
-  npm run start:http  # run the HTTP connector/Actions server locally (needs the Auth0 MCP/OBO variables above)
+  npm run start:http  # run the HTTP MCP server locally (needs the Auth0 MCP/OBO variables above)
 ```
 
 To build the Docker image locally: `docker build -t bizidashboard-mcp .`

@@ -31,7 +31,7 @@ function getBaseUrl(): string {
 }
 
 function getPublicApiKey(): string | null {
-  // Remote MCP/Actions calls are authorized solely as the bearer-token user.
+  // Remote MCP calls are authorized solely as the bearer-token user.
   // Never let a deployment-wide key silently elevate that user.
   if (requestAuthorization()?.remote) return null
   return process.env.BIZI_PUBLIC_API_KEY ?? null
@@ -161,7 +161,7 @@ function buildQueryString(params: QueryParams): string {
 /**
  * GET a JSON endpoint on the BiziDashboard public API.
  * Local stdio mode can optionally send X-Public-Api-Key for backwards compatibility.
- * Remote MCP/Actions mode exchanges the original user bearer for a token whose
+ * Remote MCP mode exchanges the original user bearer for a token whose
  * audience is DatosBizi's API; it never forwards either local credentials or
  * the MCP-resource token to the API.
  */
