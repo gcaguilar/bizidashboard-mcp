@@ -8,6 +8,23 @@ export type OAuthEndpoints = {
   revocationUrl: string
 }
 
+/**
+ * Auth0 models RFC 8707 resource indicators as registered API services. The
+ * MCP resource URL is this server, whereas DatosBizi tokens are issued for
+ * AUTH0_AUDIENCE, so forwarding the MCP `resource` value makes Auth0 reject
+ * the request as an unknown service.
+ */
+export function removeMcpResourceIndicator(url: URL): URL {
+  const sanitized = new URL(url)
+  sanitized.searchParams.delete('resource')
+  return sanitized
+}
+
+export function removeMcpResourceFromBody(body: Record<string, unknown>): Record<string, unknown> {
+  const { resource: _resource, ...sanitized } = body
+  return sanitized
+}
+
 function normalizedHttpsOrigin(value: string | undefined): URL | null {
   if (!value) return null
   try {
@@ -59,7 +76,7 @@ export function attachOAuthProxy(app: Express, options: { fetchImpl?: FetchLike 
     if (req.hostname.toLowerCase() !== proxyOrigin.hostname.toLowerCase()) return next()
     if (!['/authorize', '/oauth/token', '/oauth/revoke'].includes(req.path)) return res.sendStatus(404)
 
-    const upstream = new URL(req.originalUrl, `https://${auth0Domain}`)
+    const upstream = removeMcpResourceIndicator(new URL(req.originalUrl, `https://${auth0Domain}`))
     try {
       if (req.path === '/authorize') {
         if (req.method !== 'GET') return res.sendStatus(405)
@@ -74,9 +91,10 @@ export function attachOAuthProxy(app: Express, options: { fetchImpl?: FetchLike 
       if (authorization) headers.set('authorization', authorization)
       headers.set('accept', req.get('accept') ?? 'application/json')
       const isForm = contentType?.split(';', 1)[0].trim() === 'application/x-www-form-urlencoded'
+      const requestBody = removeMcpResourceFromBody((req.body ?? {}) as Record<string, unknown>)
       const body = isForm
-        ? new URLSearchParams(req.body as Record<string, string>).toString()
-        : JSON.stringify(req.body ?? {})
+        ? new URLSearchParams(requestBody as Record<string, string>).toString()
+        : JSON.stringify(requestBody)
 
       const upstreamResponse = await fetchImpl(upstream, {
         method: 'POST',

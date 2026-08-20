@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { getOAuthEndpoints } from '../dist/oauth-proxy.js'
+import { getOAuthEndpoints, removeMcpResourceFromBody, removeMcpResourceIndicator } from '../dist/oauth-proxy.js'
 
 test('uses Auth0 directly when no same-domain proxy is configured', () => {
   assert.deepEqual(getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com', AUTH0_AUDIENCE: 'https://api.datosbizi.com' }), {
@@ -38,4 +38,17 @@ test('requires the exact audience to request an Auth0 API access token', () => {
     () => getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com' }),
     /AUTH0_AUDIENCE must be set/,
   )
+})
+
+test('removes the MCP resource indicator before forwarding to Auth0', () => {
+  const upstream = removeMcpResourceIndicator(new URL(
+    '/authorize?audience=https%3A%2F%2Fapi.datosbizi.com&resource=https%3A%2F%2Fmcp.datosbizi.com%2F&state=state',
+    'https://tenant.auth0.com',
+  ))
+
+  assert.equal(upstream.toString(), 'https://tenant.auth0.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com&state=state')
+  assert.deepEqual(removeMcpResourceFromBody({ grant_type: 'authorization_code', code: 'code', resource: 'https://mcp.datosbizi.com/' }), {
+    grant_type: 'authorization_code',
+    code: 'code',
+  })
 })
