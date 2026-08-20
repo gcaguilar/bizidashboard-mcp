@@ -22,11 +22,15 @@ function normalizedHttpsOrigin(value: string | undefined): URL | null {
 export function getOAuthEndpoints(env = process.env): OAuthEndpoints {
   const auth0Domain = env.AUTH0_DOMAIN
   if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
+  const audience = env.AUTH0_AUDIENCE
+  if (!audience) throw new Error('AUTH0_AUDIENCE must be set')
 
   const proxyOrigin = normalizedHttpsOrigin(env.OAUTH_PROXY_ORIGIN)
   const origin = proxyOrigin?.origin ?? `https://${auth0Domain}`
+  const authorizationUrl = new URL('/authorize', origin)
+  authorizationUrl.searchParams.set('audience', audience)
   return {
-    authorizationUrl: `${origin}/authorize`,
+    authorizationUrl: authorizationUrl.toString(),
     tokenUrl: `${origin}/oauth/token`,
     revocationUrl: `${origin}/oauth/revoke`,
   }

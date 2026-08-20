@@ -3,6 +3,7 @@ import { ProxyOAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js'
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js'
+import { getOAuthEndpoints } from './oauth-proxy.js'
 
 function requireEnv(key: string): string {
   const val = process.env[key]
@@ -22,7 +23,9 @@ export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 export function getAllowedClientIds(env: NodeJS.ProcessEnv = process.env): string[] {
-  return (env.AUTH0_CLIENT_IDS ?? '')
+  // The explicit name is the production setting. Keep the original shorter
+  // name so existing deployments do not suddenly accept a broader set.
+  return (env.AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS ?? env.AUTH0_CLIENT_IDS ?? '')
     .split(',')
     .map((clientId) => clientId.trim())
     .filter(Boolean)
@@ -34,6 +37,7 @@ export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyO
   const auth0Domain = requireEnv('AUTH0_DOMAIN')
   const auth0Audiences = getAllowedAudiences()
   const allowedClientIds = getAllowedClientIds()
+  const oauthEndpoints = getOAuthEndpoints()
   const jwksUrl = `https://${auth0Domain}/.well-known/jwks.json`
   const issuer = `https://${auth0Domain}/`
 
@@ -92,9 +96,7 @@ export function createOAuthProvider(options: { jwks?: JwksSource } = {}): ProxyO
 
   return new ProxyOAuthServerProvider({
     endpoints: {
-      authorizationUrl: `https://${auth0Domain}/authorize`,
-      tokenUrl: `https://${auth0Domain}/oauth/token`,
-      revocationUrl: `https://${auth0Domain}/oauth/revoke`,
+      ...oauthEndpoints,
     },
     verifyAccessToken,
     getClient,

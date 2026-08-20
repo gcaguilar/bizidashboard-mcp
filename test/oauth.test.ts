@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose'
-import { createOAuthProvider, getAllowedAudiences } from '../dist/oauth.js'
+import { createOAuthProvider, getAllowedAudiences, getAllowedClientIds } from '../dist/oauth.js'
 
 const issuer = 'https://auth.example.test/'
 const audience = 'https://api.datosbizi.com'
@@ -30,6 +30,7 @@ test('parses comma-separated audiences and legacy singular configuration', () =>
 test('verifies a token signed by Auth0 with the configured audience and read:dashboard scope', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
+  process.env.AUTH0_AUDIENCE = audience
   process.env.AUTH0_AUDIENCES = audience
   const { token, jwks } = await createToken()
   const provider = createOAuthProvider({ jwks })
@@ -43,6 +44,7 @@ test('verifies a token signed by Auth0 with the configured audience and read:das
 test('rejects a token with another audience', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
+  process.env.AUTH0_AUDIENCE = audience
   process.env.AUTH0_AUDIENCES = audience
   const { token, jwks } = await createToken({ aud: 'https://other.example.test' })
   const provider = createOAuthProvider({ jwks })
@@ -54,6 +56,7 @@ test('rejects a token with another audience', async () => {
 test('rejects a correctly signed token without read:dashboard scope', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
+  process.env.AUTH0_AUDIENCE = audience
   process.env.AUTH0_AUDIENCES = audience
   const { token, jwks } = await createToken({ scope: 'profile email read:exports' })
   const provider = createOAuthProvider({ jwks })
@@ -65,6 +68,7 @@ test('rejects a correctly signed token without read:dashboard scope', async () =
 test('can restrict accepted tokens to configured Auth0 clients', async () => {
   const original = { ...process.env }
   process.env.AUTH0_DOMAIN = 'auth.example.test'
+  process.env.AUTH0_AUDIENCE = audience
   process.env.AUTH0_AUDIENCES = audience
   process.env.AUTH0_CLIENT_IDS = 'datosbizi-web'
   const { privateKey, jwks } = await createToken()
@@ -80,4 +84,12 @@ test('can restrict accepted tokens to configured Auth0 clients', async () => {
 
   await provider.verifyAccessToken(token)
   process.env = original
+})
+
+test('prefers the explicit access-token client allowlist and retains the legacy alias', () => {
+  assert.deepEqual(
+    getAllowedClientIds({ AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS: 'chatgpt-client, other-client', AUTH0_CLIENT_IDS: 'legacy-client' }),
+    ['chatgpt-client', 'other-client'],
+  )
+  assert.deepEqual(getAllowedClientIds({ AUTH0_CLIENT_IDS: 'legacy-client' }), ['legacy-client'])
 })
