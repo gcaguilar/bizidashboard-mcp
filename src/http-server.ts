@@ -56,10 +56,13 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
   const oauthMetadata = getOAuthServerMetadata()
 
-  const resourceServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
-  if (process.env.NODE_ENV === 'production' && resourceServerUrl.protocol !== 'https:') throw new Error('BASE_URL must use HTTPS in production')
+  const publicServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
+  if (process.env.NODE_ENV === 'production' && publicServerUrl.protocol !== 'https:') throw new Error('BASE_URL must use HTTPS in production')
+  // RFC 9728 identifies the protected resource itself, not the host where it
+  // happens to be served. Claude validates this against the connector URL.
+  const resourceServerUrl = new URL('/mcp', publicServerUrl)
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceServerUrl)
-  const publicBaseUrl = resourceServerUrl.origin
+  const publicBaseUrl = publicServerUrl.origin
 
   const oauthProvider = options.oauthProvider ?? createOAuthProvider()
   const bearerAuthMiddleware = requireBearerAuth({
