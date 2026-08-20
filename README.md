@@ -60,21 +60,22 @@ Then point your MCP client at the built entrypoint:
 
 **The HTTP server requires OAuth-based authentication via Auth0.** Before running it, you must:
 
-1. Register an application in your Auth0 tenant:
-   - Go to **Applications** → **Create Application** → **Regular Web Application** (or **Single Page Application**).
-   - Note its **Client ID** (public, stored as `AUTH0_CLIENT_ID`).
-   - Set up an **API** in Auth0 with an identifier (e.g., `https://mcp.yourdomain.com`); this becomes `AUTH0_AUDIENCE`.
+1. Register a separate application for each OAuth client in your Auth0 tenant:
+   - Use **Applications** → **Create Application** → **Regular Web Application** for ChatGPT.
+   - Set up an **API** with identifier `https://api.datosbizi.com`, RS256 signing, and grant the application `read:dashboard`.
+   - Do not reuse the web-login client unless its callback URLs and purpose are intentionally shared.
 
 2. Configure these environment variables:
 
 | Variable | Purpose |
 | --- | --- |
 | `AUTH0_DOMAIN` | **Required.** Your Auth0 tenant domain, e.g., `example.auth0.com`. |
-| `AUTH0_AUDIENCES` | **Required.** Comma-separated Auth0 API identifiers accepted by the MCP, e.g., `https://api.datosbizi.com`. Tokens must include `read:dashboard`; `read:exports` enables elevated exports and heavy queries. |
-| `AUTH0_AUDIENCE` | Legacy singular alias for `AUTH0_AUDIENCES`. |
+| `AUTH0_AUDIENCE` | **Required for Authorization Code.** Exact Auth0 API identifier requested at `/authorize`, e.g., `https://api.datosbizi.com`. This makes Auth0 issue a JWT access token for that API. |
+| `AUTH0_AUDIENCES` | Comma-separated Auth0 API identifiers accepted by the verifier. Use the same single value as `AUTH0_AUDIENCE` unless deliberately accepting additional APIs. Tokens must include `read:dashboard`; `read:exports` enables elevated exports and heavy queries. |
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
-| `AUTH0_CLIENT_IDS` | _(optional)_ Comma-separated Auth0 `azp` client IDs allowed to call the MCP. Set this in production. |
+| `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS` | _(optional)_ Comma-separated Auth0 `azp` client IDs allowed to call the MCP. Set this in production. |
+| `AUTH0_CLIENT_IDS` | Backwards-compatible alias for `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS`. |
 | `OAUTH_PROXY_ORIGIN` | _(optional)_ HTTPS origin such as `https://auth.datosbizi.com` that proxies Auth0 OAuth endpoints. Required for ChatGPT Actions because its OAuth and API URLs must share a root domain. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
@@ -146,8 +147,9 @@ docker run -d \
   --name bizidashboard-mcp \
   -p 8787:8787 \
   -e AUTH0_DOMAIN=<your-auth0-domain> \
+  -e AUTH0_AUDIENCE=https://api.datosbizi.com \
   -e AUTH0_AUDIENCES=https://api.datosbizi.com \
-  -e AUTH0_CLIENT_ID=<your-app-client-id> \
+  -e AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS=<chatgpt-auth0-client-id> \
   -e BASE_URL=https://mcp.yourdomain.com \
   ghcr.io/gcaguilar/bizidashboard-mcp:latest
 ```
@@ -158,8 +160,9 @@ docker run -d \
 npm install
 npm run build
 AUTH0_DOMAIN=<your-auth0-domain> \
+AUTH0_AUDIENCE=https://api.datosbizi.com \
 AUTH0_AUDIENCES=https://api.datosbizi.com \
-  AUTH0_CLIENT_ID=<your-app-client-id> \
+  AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS=<chatgpt-auth0-client-id> \
   npm run start:http
 ```
 
@@ -172,10 +175,12 @@ none of the three clients below will call a plain-HTTP or self-signed endpoint.
 - **Claude (claude.ai → Settings → Connectors → Add custom connector)**: URL
   `https://mcp.yourdomain.com/mcp`. Authentication is OAuth 2.0 Authorization Code;
   Claude will discover the flow automatically via `/.well-known/oauth-protected-resource`.
-- **ChatGPT (GPT builder → Configure → Actions → Import from URL)**: import
-  `https://mcp.yourdomain.com/openapi.json`, then set authentication to "OAuth 2.0"
-  with the authorization URL `https://your-auth0-domain/authorize` and token URL
-  `https://your-auth0-domain/oauth/token`.
+- **ChatGPT MCP / GPT builder**: configure the dedicated Regular Web Application
+  with ChatGPT's callback URL exactly as displayed by ChatGPT. Add that callback
+  to **Allowed Callback URLs**, then configure OAuth with the ChatGPT application's
+  Client ID and Client Secret, scope `openid profile email read:dashboard`, authorization
+  URL `https://<auth0-domain>/authorize?audience=https%3A%2F%2F<api-identifier>`,
+  and token URL `https://<auth0-domain>/oauth/token`.
 - **Gemini (Gem/Extension → Actions → Import OpenAPI schema)**: same
   `https://mcp.yourdomain.com/openapi.json`, OAuth 2.0 authentication with your
   Auth0 endpoints.

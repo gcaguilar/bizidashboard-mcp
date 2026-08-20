@@ -15,8 +15,9 @@ Production variables:
 
 ```text
 AUTH0_DOMAIN=<DatosBizi Auth0 tenant>
+AUTH0_AUDIENCE=https://api.datosbizi.com
 AUTH0_AUDIENCES=<exact token audience>
-AUTH0_CLIENT_IDS=<comma-separated azp values used by approved clients>
+AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS=<comma-separated azp values used by approved clients>
 BASE_URL=https://mcp.datosbizi.com
 # Required for ChatGPT Actions; this hostname must route to this same MCP service.
 OAUTH_PROXY_ORIGIN=https://auth.datosbizi.com
@@ -31,6 +32,11 @@ host. `read:exports` is additionally required for remote CSV exports of alert hi
 and rebalancing reports, alert-history requests above 500 rows, and rebalancing windows
 above 30 days.
 
+`AUTH0_AUDIENCE` is required when advertising an Authorization Code flow. It is
+appended to the authorization endpoint so Auth0 returns an RS256 JWT for the
+DatosBizi API rather than an opaque tenant token. `AUTH0_CLIENT_IDS` remains a
+backwards-compatible alias for `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS`.
+
 `BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
 HTTP requests to `/mcp` and `/actions/*` never send it upstream, even if it is present
 in the deployment environment. Those requests act solely as the bearer-token user.
@@ -41,6 +47,25 @@ The web page at `datosbizi.com/developers` should link users to the official
 custom-connector flow for each AI client and show the remote URL above. The
 web page must not receive or store the AI client's OAuth tokens. The AI client
 performs OAuth with Auth0 and sends its bearer token to the MCP.
+
+### ChatGPT
+
+Use a dedicated Regular Web Application for ChatGPT, not the web-login
+application. Configure the API Resource Server for RS256 and authorize
+`read:dashboard` for that application. Add exactly the callback URL displayed
+by ChatGPT to **Allowed Callback URLs**:
+
+```text
+<ChatGPT OAuth callback URL>
+```
+
+Configure ChatGPT OAuth with that application's Client ID and Client Secret:
+
+```text
+Authorization URL: https://<auth0-domain>/authorize?audience=https%3A%2F%2F<api-identifier>
+Token URL: https://<auth0-domain>/oauth/token
+Scope: openid profile email read:dashboard
+```
 
 Keep all tools available in the remote client. If a user requests an elevated variant
 without `read:exports`, the MCP returns a clear 403/error explaining that they must
