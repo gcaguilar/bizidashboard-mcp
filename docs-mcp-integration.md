@@ -17,13 +17,10 @@ Production variables:
 AUTH0_DOMAIN=<DatosBizi Auth0 tenant>
 # Token received from Claude/ChatGPT; exact Auth0 API identifier for the MCP.
 MCP_AUTH0_AUDIENCE=https://mcp.datosbizi.com/mcp
-MCP_AUTH0_AUDIENCES=https://mcp.datosbizi.com/mcp
 # Token used only by the MCP after OBO exchange.
 API_AUTH0_AUDIENCE=https://api.datosbizi.com
 MCP_AUTH0_CLIENT_ID=<resource-server-obo-client-id>
 MCP_AUTH0_CLIENT_SECRET=<resource-server-obo-client-secret>
-# Kept for local stdio login compatibility.
-AUTH0_AUDIENCE=https://api.datosbizi.com
 BASE_URL=https://mcp.datosbizi.com
 PORT=80
 BIZI_ALLOWED_API_HOSTS=datosbizi.com
@@ -41,7 +38,8 @@ Authorization Responses, and Dynamic Client Registration. Create the MCP API wit
 identifier `https://mcp.datosbizi.com/mcp` (RS256 and the two scopes). The OBO client
 is a resource-server client with `on_behalf_of_token_exchange`, not a normal M2M app.
 For public connectors leave `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS` unset: DCR creates
-a different client for each connector installation.
+a different client for each connector installation. Do not configure the old OAuth
+proxy (`OAUTH_PROXY_ORIGIN`) or static audience lists on this deployment.
 
 `BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
 HTTP requests to `/mcp` and `/actions/*` never send it upstream, even if it is present
