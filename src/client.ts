@@ -3,6 +3,14 @@ import { requestAuthorization } from './request-context.js'
 
 const DEFAULT_BASE_URL = 'https://datosbizi.com'
 const DEFAULT_TIMEOUT_MS = 15_000
+const DOWNSTREAM_SCOPES = new Set(['read:dashboard', 'read:exports'])
+
+type CachedDownstreamToken = {
+  accessToken: string
+  expiresAt: number
+}
+
+const downstreamTokenCache = new Map<string, CachedDownstreamToken>()
 
 export class BiziApiError extends Error {
   constructor(
@@ -31,7 +39,10 @@ function getPublicApiKey(): string | null {
 
 async function getAccessToken(): Promise<string | null> {
   const authorization = requestAuthorization()
-  if (authorization?.remote) return authorization.token ?? null
+  if (authorization?.remote) {
+    if (!authorization.token) return null
+    return exchangeMcpTokenForApiToken(authorization.token, authorization.scopes ?? [])
+  }
 
   const accessToken = authorization?.token ?? process.env.BIZI_ACCESS_TOKEN
   if (accessToken) return accessToken
@@ -58,6 +69,75 @@ async function getAccessToken(): Promise<string | null> {
   return refreshed.access_token
 }
 
+function getDownstreamAudience(): string {
+  const audience = process.env.API_AUTH0_AUDIENCE || process.env.AUTH0_AUDIENCE
+  if (!audience) throw new BiziApiError('MCP server is missing API_AUTH0_AUDIENCE for the DatosBizi API', 502, '/oauth/token')
+  return audience
+}
+
+function getExchangeScope(scopes: string[]): string {
+  const downstreamScopes = scopes.filter((scope) => DOWNSTREAM_SCOPES.has(scope))
+  return downstreamScopes.length > 0 ? downstreamScopes.join(' ') : 'read:dashboard'
+}
+
+/**
+ * A token issued for the MCP resource cannot be forwarded to DatosBizi's API:
+ * its audience is deliberately different. Auth0 exchanges it on behalf of the
+ * signed-in user and returns a token valid only for the downstream API.
+ */
+export async function exchangeMcpTokenForApiToken(incomingToken: string, scopes: string[]): Promise<string> {
+  const now = Date.now()
+  const scope = getExchangeScope(scopes)
+  const cacheKey = `${incomingToken}:${scope}`
+  const cached = downstreamTokenCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) return cached.accessToken
+
+  const domain = process.env.AUTH0_DOMAIN
+  const clientId = process.env.MCP_AUTH0_CLIENT_ID
+  const clientSecret = process.env.MCP_AUTH0_CLIENT_SECRET
+  if (!domain || !clientId || !clientSecret) {
+    throw new BiziApiError('MCP server OBO exchange is not configured', 502, '/oauth/token')
+  }
+
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    subject_token: incomingToken,
+    subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+    audience: getDownstreamAudience(),
+    scope,
+  })
+  let response: Response
+  try {
+    response = await fetch(`https://${domain}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body,
+    })
+  } catch {
+    throw new BiziApiError('Auth0 was unavailable while exchanging the MCP token', 502, '/oauth/token')
+  }
+
+  if (!response.ok) {
+    throw new BiziApiError('Auth0 rejected the MCP token exchange for the DatosBizi API', 502, '/oauth/token')
+  }
+  const payload = await response.json() as Record<string, unknown>
+  if (typeof payload.access_token !== 'string' || !payload.access_token) {
+    throw new BiziApiError('Auth0 returned no API access token for the MCP request', 502, '/oauth/token')
+  }
+
+  const expiresIn = Number(payload.expires_in)
+  if (Number.isFinite(expiresIn) && expiresIn > 30) {
+    downstreamTokenCache.set(cacheKey, {
+      accessToken: payload.access_token,
+      expiresAt: now + (expiresIn - 30) * 1_000,
+    })
+  }
+  return payload.access_token
+}
+
 async function addAuthHeaders(headers: Record<string, string>): Promise<void> {
   const accessToken = await getAccessToken()
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
@@ -80,7 +160,9 @@ function buildQueryString(params: QueryParams): string {
 /**
  * GET a JSON endpoint on the BiziDashboard public API.
  * Local stdio mode can optionally send X-Public-Api-Key for backwards compatibility.
- * Remote MCP/Actions mode always forwards only the original user bearer token.
+ * Remote MCP/Actions mode exchanges the original user bearer for a token whose
+ * audience is DatosBizi's API; it never forwards either local credentials or
+ * the MCP-resource token to the API.
  */
 export async function fetchJson<T>(route: string, params: QueryParams = {}): Promise<T> {
   const url = `${getBaseUrl()}${route}${buildQueryString(params)}`

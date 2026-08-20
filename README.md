@@ -54,29 +54,40 @@ Then point your MCP client at the built entrypoint:
 | --- | --- | --- |
 | `BIZI_API_BASE_URL` | `https://datosbizi.com` | Base URL of the BiziDashboard instance to query. Override to point at another city's deployment or a local dev server. |
 | `BIZI_PUBLIC_API_KEY` | _(none)_ | **Local stdio only.** Optional legacy `X-Public-Api-Key` for elevated local calls. It is never sent by the remote HTTP MCP/Actions server. |
-| `BIZI_ACCESS_TOKEN` | _(none)_ | Optional local stdio Auth0 access token forwarded to DatosBizi. Remote HTTP requests forward their incoming bearer token instead. `BIZI_INSTALLATION_ID` is forwarded when set. |
+| `BIZI_ACCESS_TOKEN` | _(none)_ | Optional local stdio Auth0 access token forwarded to DatosBizi. `BIZI_INSTALLATION_ID` is forwarded when set. |
 
 ### HTTP Server & OAuth (inbound, remote clients only)
 
 **The HTTP server requires OAuth-based authentication via Auth0.** Before running it, you must:
 
-1. Register a separate application for each OAuth client in your Auth0 tenant:
-   - Use **Applications** → **Create Application** → **Regular Web Application** for ChatGPT.
-   - Set up an **API** with identifier `https://api.datosbizi.com`, RS256 signing, and grant the application `read:dashboard`.
-   - Do not reuse the web-login client unless its callback URLs and purpose are intentionally shared.
+1. Create an Auth0 API for the MCP resource, with exact identifier
+   `https://mcp.datosbizi.com/mcp`, RS256, and scopes `read:dashboard` and
+   `read:exports`. Enable Dynamic Client Registration and Resource Parameter
+   Compatibility Profile in the tenant. Claude and ChatGPT then register their
+   own public clients; users do not receive an OAuth secret.
+
+2. Create Auth0's **resource-server OBO client** for that MCP API. This is not
+   the ordinary Machine-to-Machine application screen: it is created through
+   the Auth0 Management API/CLI with `app_type: resource_server` and the
+   `on_behalf_of_token_exchange` profile. Keep its client secret only in the
+   MCP deployment.
 
 2. Configure these environment variables:
 
 | Variable | Purpose |
 | --- | --- |
 | `AUTH0_DOMAIN` | **Required.** Your Auth0 tenant domain, e.g., `example.auth0.com`. |
-| `AUTH0_AUDIENCE` | **Required for Authorization Code.** Exact Auth0 API identifier requested at `/authorize`, e.g., `https://api.datosbizi.com`. This makes Auth0 issue a JWT access token for that API. |
-| `AUTH0_AUDIENCES` | Comma-separated Auth0 API identifiers accepted by the verifier. Use the same single value as `AUTH0_AUDIENCE` unless deliberately accepting additional APIs. Tokens must include `read:dashboard`; `read:exports` enables elevated exports and heavy queries. |
+| `MCP_AUTH0_AUDIENCE` | **Required in production.** Exact MCP Auth0 API identifier: `https://mcp.datosbizi.com/mcp`. It is the audience verified for tokens received from connectors. |
+| `MCP_AUTH0_AUDIENCES` | Optional comma-separated accepted MCP audiences. Normally use the same single value as `MCP_AUTH0_AUDIENCE`. |
+| `API_AUTH0_AUDIENCE` | **Required in production.** Existing DatosBizi API identifier, e.g. `https://api.datosbizi.com`. OBO tokens are issued for this audience before the MCP calls the API. |
+| `MCP_AUTH0_CLIENT_ID` | **Required in production.** Client ID of the special Auth0 resource-server OBO client. |
+| `MCP_AUTH0_CLIENT_SECRET` | **Required in production.** Secret of that OBO client. Store only as a Coolify secret. |
+| `AUTH0_AUDIENCE` | Legacy/local stdio audience. It remains the fallback for older single-audience deployments, not the recommended remote MCP setting. |
+| `AUTH0_AUDIENCES` | Backwards-compatible accepted-audience configuration. |
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
 | `AUTH0_CLIENT_ID` | **Required for OAuth client applications** (e.g., a frontend or CLI that initiates the flow). The public application ID from your Auth0 app. |
-| `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS` | _(optional)_ Comma-separated Auth0 `azp` client IDs allowed to call the MCP. Set this in production. |
+| `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS` | _(optional)_ Static `azp` allowlist. **Leave unset for public DCR connectors**, otherwise newly registered Claude/ChatGPT clients are rejected. |
 | `AUTH0_CLIENT_IDS` | Backwards-compatible alias for `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS`. |
-| `OAUTH_PROXY_ORIGIN` | _(optional)_ HTTPS origin such as `https://auth.datosbizi.com` that proxies Auth0 OAuth endpoints. Required for ChatGPT Actions because its OAuth and API URLs must share a root domain. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
 
@@ -132,10 +143,10 @@ operations three ways:
 
 Every route except `/openapi.json` and `/healthz` requires an OAuth bearer token
 (Authorization Code flow with Auth0), obtained after registering as described above.
-The remote server validates issuer, audience, signature, expiry, `azp` (when
-configured), and `read:dashboard`; it forwards that original bearer token to
-BiziDashboard. It never substitutes `BIZI_PUBLIC_API_KEY`, so authorization and rate
-limits can remain tied to the authenticated user.
+The remote server validates issuer, MCP audience, signature, expiry, `azp` (when
+configured), and `read:dashboard`. It then performs an Auth0 On-Behalf-Of exchange,
+so BiziDashboard receives a token for `https://api.datosbizi.com`, preserving the
+signed-in user and their scopes without accepting an MCP token at the downstream API.
 
 ### Run it on your own server
 
@@ -147,9 +158,11 @@ docker run -d \
   --name bizidashboard-mcp \
   -p 8787:8787 \
   -e AUTH0_DOMAIN=<your-auth0-domain> \
+  -e MCP_AUTH0_AUDIENCE=https://mcp.yourdomain.com/mcp \
+  -e API_AUTH0_AUDIENCE=https://api.datosbizi.com \
+  -e MCP_AUTH0_CLIENT_ID=<obo-client-id> \
+  -e MCP_AUTH0_CLIENT_SECRET=<obo-client-secret> \
   -e AUTH0_AUDIENCE=https://api.datosbizi.com \
-  -e AUTH0_AUDIENCES=https://api.datosbizi.com \
-  -e AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS=<chatgpt-auth0-client-id> \
   -e BASE_URL=https://mcp.yourdomain.com \
   ghcr.io/gcaguilar/bizidashboard-mcp:latest
 ```
@@ -160,9 +173,11 @@ docker run -d \
 npm install
 npm run build
 AUTH0_DOMAIN=<your-auth0-domain> \
+MCP_AUTH0_AUDIENCE=https://mcp.yourdomain.com/mcp \
+API_AUTH0_AUDIENCE=https://api.datosbizi.com \
+MCP_AUTH0_CLIENT_ID=<obo-client-id> \
+MCP_AUTH0_CLIENT_SECRET=<obo-client-secret> \
 AUTH0_AUDIENCE=https://api.datosbizi.com \
-AUTH0_AUDIENCES=https://api.datosbizi.com \
-  AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS=<chatgpt-auth0-client-id> \
   npm run start:http
 ```
 
@@ -175,12 +190,9 @@ none of the three clients below will call a plain-HTTP or self-signed endpoint.
 - **Claude (claude.ai → Settings → Connectors → Add custom connector)**: URL
   `https://mcp.yourdomain.com/mcp`. Authentication is OAuth 2.0 Authorization Code;
   Claude will discover the flow automatically via `/.well-known/oauth-protected-resource`.
-- **ChatGPT MCP / GPT builder**: configure the dedicated Regular Web Application
-  with ChatGPT's callback URL exactly as displayed by ChatGPT. Add that callback
-  to **Allowed Callback URLs**, then configure OAuth with the ChatGPT application's
-  Client ID and Client Secret, scope `openid profile email read:dashboard`, authorization
-  URL `https://<auth0-domain>/authorize?audience=https%3A%2F%2F<api-identifier>`,
-  and token URL `https://<auth0-domain>/oauth/token`.
+- **ChatGPT MCP / GPT builder**: use the MCP URL and let the client complete
+  OAuth through Dynamic Client Registration. Do not embed the OBO client secret
+  in ChatGPT or in a public page.
 - **Gemini (Gem/Extension → Actions → Import OpenAPI schema)**: same
   `https://mcp.yourdomain.com/openapi.json`, OAuth 2.0 authentication with your
   Auth0 endpoints.
@@ -191,7 +203,7 @@ none of the three clients below will call a plain-HTTP or self-signed endpoint.
 npm run build       # compile TypeScript to dist/ (both the stdio and HTTP entrypoints)
 npm run typecheck   # type-check without emitting
 npm test            # build, then run integration tests against the live public API
-  npm run start:http  # run the HTTP connector/Actions server locally (needs AUTH0_DOMAIN and AUTH0_AUDIENCE)
+  npm run start:http  # run the HTTP connector/Actions server locally (needs the Auth0 MCP/OBO variables above)
 ```
 
 To build the Docker image locally: `docker build -t bizidashboard-mcp .`

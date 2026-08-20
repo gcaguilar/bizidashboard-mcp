@@ -25,6 +25,7 @@ async function createToken(overrides: { aud?: string; scope?: string } = {}) {
 test('parses comma-separated audiences and legacy singular configuration', () => {
   assert.deepEqual(getAllowedAudiences({ AUTH0_AUDIENCES: ' one, two ,, ' }), ['one', 'two'])
   assert.deepEqual(getAllowedAudiences({ AUTH0_AUDIENCE: 'legacy' }), ['legacy'])
+  assert.deepEqual(getAllowedAudiences({ MCP_AUTH0_AUDIENCE: 'mcp', AUTH0_AUDIENCE: 'api' }), ['mcp'])
 })
 
 test('verifies a token signed by Auth0 with the configured audience and read:dashboard scope', async () => {

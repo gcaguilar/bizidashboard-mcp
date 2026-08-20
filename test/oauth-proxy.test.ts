@@ -1,38 +1,38 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { getOAuthEndpoints, getOAuthServerMetadata, removeMcpResourceFromBody, removeMcpResourceIndicator } from '../dist/oauth-proxy.js'
+import { getMcpAuth0Audience, getOAuthEndpoints, getOAuthServerMetadata } from '../dist/oauth-proxy.js'
 
-test('uses Auth0 directly when no same-domain proxy is configured', () => {
-  assert.deepEqual(getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com', AUTH0_AUDIENCE: 'https://api.datosbizi.com' }), {
+test('uses Auth0 directly and requests the MCP resource audience', () => {
+  assert.deepEqual(getOAuthEndpoints({
+    AUTH0_DOMAIN: 'tenant.auth0.com',
+    AUTH0_AUDIENCE: 'https://api.datosbizi.com',
+  }), {
     authorizationUrl: 'https://tenant.auth0.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com',
     tokenUrl: 'https://tenant.auth0.com/oauth/token',
     revocationUrl: 'https://tenant.auth0.com/oauth/revoke',
   })
 })
 
-test('uses a valid same-domain proxy origin for OAuth endpoints', () => {
-  assert.deepEqual(getOAuthEndpoints({
+test('prefers a dedicated MCP audience over the downstream API audience', () => {
+  const env = {
     AUTH0_DOMAIN: 'tenant.auth0.com',
     AUTH0_AUDIENCE: 'https://api.datosbizi.com',
-    OAUTH_PROXY_ORIGIN: 'https://auth.datosbizi.com',
-  }), {
-    authorizationUrl: 'https://auth.datosbizi.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com',
-    tokenUrl: 'https://auth.datosbizi.com/oauth/token',
-    revocationUrl: 'https://auth.datosbizi.com/oauth/revoke',
-  })
+    MCP_AUTH0_AUDIENCE: 'https://mcp.datosbizi.com/mcp',
+  }
+  assert.equal(getMcpAuth0Audience(env), 'https://mcp.datosbizi.com/mcp')
+  assert.equal(getOAuthEndpoints(env).authorizationUrl, 'https://tenant.auth0.com/authorize?audience=https%3A%2F%2Fmcp.datosbizi.com%2Fmcp')
 })
 
-test('advertises the OAuth proxy as the authorization server when configured', () => {
+test('advertises Auth0 as the authorization server', () => {
   assert.deepEqual(getOAuthServerMetadata({
     AUTH0_DOMAIN: 'tenant.auth0.com',
-    AUTH0_AUDIENCE: 'https://api.datosbizi.com',
-    OAUTH_PROXY_ORIGIN: 'https://auth.datosbizi.com',
+    MCP_AUTH0_AUDIENCE: 'https://mcp.datosbizi.com/mcp',
   }), {
-    issuer: 'https://auth.datosbizi.com/',
-    authorization_endpoint: 'https://auth.datosbizi.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com',
-    token_endpoint: 'https://auth.datosbizi.com/oauth/token',
-    revocation_endpoint: 'https://auth.datosbizi.com/oauth/revoke',
-    registration_endpoint: 'https://auth.datosbizi.com/oidc/register',
+    issuer: 'https://tenant.auth0.com/',
+    authorization_endpoint: 'https://tenant.auth0.com/authorize?audience=https%3A%2F%2Fmcp.datosbizi.com%2Fmcp',
+    token_endpoint: 'https://tenant.auth0.com/oauth/token',
+    revocation_endpoint: 'https://tenant.auth0.com/oauth/revoke',
+    registration_endpoint: 'https://tenant.auth0.com/oidc/register',
     jwks_uri: 'https://tenant.auth0.com/.well-known/jwks.json',
     introspection_endpoint: 'https://tenant.auth0.com/oauth/introspect',
     grant_types_supported: ['authorization_code', 'refresh_token'],
@@ -43,33 +43,9 @@ test('advertises the OAuth proxy as the authorization server when configured', (
   })
 })
 
-test('does not accept an OAuth proxy origin with a path or insecure scheme', () => {
-  assert.equal(
-    getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com', AUTH0_AUDIENCE: 'https://api.datosbizi.com', OAUTH_PROXY_ORIGIN: 'http://auth.datosbizi.com' }).tokenUrl,
-    'https://tenant.auth0.com/oauth/token',
-  )
-  assert.equal(
-    getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com', AUTH0_AUDIENCE: 'https://api.datosbizi.com', OAUTH_PROXY_ORIGIN: 'https://auth.datosbizi.com/callback' }).tokenUrl,
-    'https://tenant.auth0.com/oauth/token',
-  )
-})
-
-test('requires the exact audience to request an Auth0 API access token', () => {
+test('requires an MCP audience when no legacy configuration exists', () => {
   assert.throws(
     () => getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com' }),
-    /AUTH0_AUDIENCE must be set/,
+    /MCP_AUTH0_AUDIENCE must be set/,
   )
-})
-
-test('removes the MCP resource indicator before forwarding to Auth0', () => {
-  const upstream = removeMcpResourceIndicator(new URL(
-    '/authorize?audience=https%3A%2F%2Fapi.datosbizi.com&resource=https%3A%2F%2Fmcp.datosbizi.com%2F&state=state',
-    'https://tenant.auth0.com',
-  ))
-
-  assert.equal(upstream.toString(), 'https://tenant.auth0.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com&state=state')
-  assert.deepEqual(removeMcpResourceFromBody({ grant_type: 'authorization_code', code: 'code', resource: 'https://mcp.datosbizi.com/' }), {
-    grant_type: 'authorization_code',
-    code: 'code',
-  })
 })

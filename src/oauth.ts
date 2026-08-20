@@ -12,9 +12,9 @@ function requireEnv(key: string): string {
 }
 
 export function getAllowedAudiences(env: NodeJS.ProcessEnv = process.env): string[] {
-  // Keep the singular name fully compatible with existing Coolify deployments;
-  // AUTH0_AUDIENCES is preferred when both are present.
-  const configured = env.AUTH0_AUDIENCES || env.AUTH0_AUDIENCE || ''
+  // MCP_AUTH0_AUDIENCES lets this resource have its own audience while the
+  // legacy AUTH0_AUDIENCE remains available to local API clients.
+  const configured = env.MCP_AUTH0_AUDIENCES || env.MCP_AUTH0_AUDIENCE || env.AUTH0_AUDIENCES || env.AUTH0_AUDIENCE || ''
   const audiences = configured.split(',').map((audience) => audience.trim()).filter(Boolean)
   if (audiences.length === 0) {
     throw new Error('Missing required environment variable: AUTH0_AUDIENCES')

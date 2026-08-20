@@ -8,7 +8,7 @@ import { BiziAuthorizationError, DASHBOARD_SCOPE, operations, runOperation } fro
 import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
-import { attachOAuthProxy, getOAuthServerMetadata } from './oauth-proxy.js'
+import { getOAuthServerMetadata } from './oauth-proxy.js'
 import { withRequestAuthorization } from './request-context.js'
 
 function getCorsOrigins(): string[] {
@@ -33,8 +33,6 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   app.set('trust proxy', 1)
   app.use(express.json({ limit: '1mb' }))
   app.use(express.urlencoded({ extended: false, limit: '1mb' }))
-  attachOAuthProxy(app)
-
   const corsOrigins = getCorsOrigins()
   app.use((req, res, next) => {
     const origin = req.get('origin')
