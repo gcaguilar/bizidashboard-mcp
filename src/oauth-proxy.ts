@@ -8,6 +8,21 @@ export type OAuthEndpoints = {
   revocationUrl: string
 }
 
+export type OAuthServerMetadata = {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  revocation_endpoint: string
+  registration_endpoint: string
+  jwks_uri: string
+  introspection_endpoint: string
+  grant_types_supported: string[]
+  token_endpoint_auth_methods_supported: string[]
+  response_types_supported: string[]
+  response_modes_supported: string[]
+  code_challenge_methods_supported: string[]
+}
+
 /**
  * Auth0 models RFC 8707 resource indicators as registered API services. The
  * MCP resource URL is this server, whereas DatosBizi tokens are issued for
@@ -53,6 +68,35 @@ export function getOAuthEndpoints(env = process.env): OAuthEndpoints {
   }
 }
 
+/**
+ * When an OAuth proxy is configured it is the authorization-server origin we
+ * advertise to MCP clients. Otherwise clients discover Auth0 directly and
+ * send its unsupported MCP resource indicator straight to Auth0, bypassing
+ * the normalization in attachOAuthProxy().
+ */
+export function getOAuthServerMetadata(env = process.env): OAuthServerMetadata {
+  const auth0Domain = env.AUTH0_DOMAIN
+  if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
+
+  const proxyOrigin = normalizedHttpsOrigin(env.OAUTH_PROXY_ORIGIN)
+  const origin = proxyOrigin?.origin ?? `https://${auth0Domain}`
+  const endpoints = getOAuthEndpoints(env)
+  return {
+    issuer: `${origin}/`,
+    authorization_endpoint: endpoints.authorizationUrl,
+    token_endpoint: endpoints.tokenUrl,
+    revocation_endpoint: endpoints.revocationUrl,
+    registration_endpoint: `${origin}/oidc/register`,
+    jwks_uri: `https://${auth0Domain}/.well-known/jwks.json`,
+    introspection_endpoint: `https://${auth0Domain}/oauth/introspect`,
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_methods_supported: ['none', 'client_secret_basic', 'client_secret_post'],
+    response_types_supported: ['code'],
+    response_modes_supported: ['query'],
+    code_challenge_methods_supported: ['S256'],
+  }
+}
+
 function copyResponseHeaders(source: Headers, res: Response) {
   for (const header of ['cache-control', 'content-type', 'www-authenticate']) {
     const value = source.get(header)
@@ -74,7 +118,11 @@ export function attachOAuthProxy(app: Express, options: { fetchImpl?: FetchLike 
 
   app.use(async (req, res, next) => {
     if (req.hostname.toLowerCase() !== proxyOrigin.hostname.toLowerCase()) return next()
-    if (!['/authorize', '/oauth/token', '/oauth/revoke'].includes(req.path)) return res.sendStatus(404)
+    if (req.path === '/.well-known/oauth-authorization-server') {
+      if (req.method !== 'GET') return res.sendStatus(405)
+      return res.json(getOAuthServerMetadata())
+    }
+    if (!['/authorize', '/oauth/token', '/oauth/revoke', '/oidc/register'].includes(req.path)) return res.sendStatus(404)
 
     const upstream = removeMcpResourceIndicator(new URL(req.originalUrl, `https://${auth0Domain}`))
     try {

@@ -8,7 +8,7 @@ import { BiziAuthorizationError, DASHBOARD_SCOPE, operations, runOperation } fro
 import { tools } from './tools.js'
 import { buildOpenApiDocument } from './openapi.js'
 import { createOAuthProvider } from './oauth.js'
-import { attachOAuthProxy, getOAuthEndpoints } from './oauth-proxy.js'
+import { attachOAuthProxy, getOAuthServerMetadata } from './oauth-proxy.js'
 import { withRequestAuthorization } from './request-context.js'
 
 function getCorsOrigins(): string[] {
@@ -54,7 +54,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   // OAuth metadata: advertises this server as an OAuth protected resource using Auth0 as authorization server
   const auth0Domain = process.env.AUTH0_DOMAIN
   if (!auth0Domain) throw new Error('AUTH0_DOMAIN must be set')
-  const oauthEndpoints = getOAuthEndpoints()
+  const oauthMetadata = getOAuthServerMetadata()
 
   const resourceServerUrl = new URL(process.env.BASE_URL || 'http://localhost:8787')
   if (process.env.NODE_ENV === 'production' && resourceServerUrl.protocol !== 'https:') throw new Error('BASE_URL must use HTTPS in production')
@@ -70,17 +70,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
 
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: {
-      issuer: `https://${auth0Domain}/`,
-      authorization_endpoint: oauthEndpoints.authorizationUrl,
-      token_endpoint: oauthEndpoints.tokenUrl,
-      revocation_endpoint: oauthEndpoints.revocationUrl,
-      jwks_uri: `https://${auth0Domain}/.well-known/jwks.json`,
-      introspection_endpoint: `https://${auth0Domain}/oauth/introspect`,
-      grant_types_supported: ['authorization_code', 'refresh_token'],
-      token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
-      response_types_supported: ['code'],
-      response_modes_supported: ['query'],
-      code_challenge_methods_supported: ['S256'],
+      ...oauthMetadata,
     },
     resourceServerUrl,
     resourceName: 'BiziDashboard MCP Server',

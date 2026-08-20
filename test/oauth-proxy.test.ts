@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { getOAuthEndpoints, removeMcpResourceFromBody, removeMcpResourceIndicator } from '../dist/oauth-proxy.js'
+import { getOAuthEndpoints, getOAuthServerMetadata, removeMcpResourceFromBody, removeMcpResourceIndicator } from '../dist/oauth-proxy.js'
 
 test('uses Auth0 directly when no same-domain proxy is configured', () => {
   assert.deepEqual(getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com', AUTH0_AUDIENCE: 'https://api.datosbizi.com' }), {
@@ -19,6 +19,27 @@ test('uses a valid same-domain proxy origin for OAuth endpoints', () => {
     authorizationUrl: 'https://auth.datosbizi.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com',
     tokenUrl: 'https://auth.datosbizi.com/oauth/token',
     revocationUrl: 'https://auth.datosbizi.com/oauth/revoke',
+  })
+})
+
+test('advertises the OAuth proxy as the authorization server when configured', () => {
+  assert.deepEqual(getOAuthServerMetadata({
+    AUTH0_DOMAIN: 'tenant.auth0.com',
+    AUTH0_AUDIENCE: 'https://api.datosbizi.com',
+    OAUTH_PROXY_ORIGIN: 'https://auth.datosbizi.com',
+  }), {
+    issuer: 'https://auth.datosbizi.com/',
+    authorization_endpoint: 'https://auth.datosbizi.com/authorize?audience=https%3A%2F%2Fapi.datosbizi.com',
+    token_endpoint: 'https://auth.datosbizi.com/oauth/token',
+    revocation_endpoint: 'https://auth.datosbizi.com/oauth/revoke',
+    registration_endpoint: 'https://auth.datosbizi.com/oidc/register',
+    jwks_uri: 'https://tenant.auth0.com/.well-known/jwks.json',
+    introspection_endpoint: 'https://tenant.auth0.com/oauth/introspect',
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_methods_supported: ['none', 'client_secret_basic', 'client_secret_post'],
+    response_types_supported: ['code'],
+    response_modes_supported: ['query'],
+    code_challenge_methods_supported: ['S256'],
   })
 })
 
