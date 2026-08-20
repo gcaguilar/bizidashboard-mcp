@@ -55,6 +55,7 @@ test('remote requests exchange the MCP bearer and never send a global API key', 
       const body = new URLSearchParams(String(init?.body))
       assert.equal(body.get('grant_type'), 'urn:ietf:params:oauth:grant-type:token-exchange')
       assert.equal(body.get('subject_token'), 'incoming-mcp-token')
+      assert.equal(body.get('requested_token_type'), 'urn:ietf:params:oauth:token-type:access_token')
       assert.equal(body.get('audience'), 'https://api.datosbizi.com')
       assert.equal(body.get('scope'), 'read:dashboard')
       return new Response(JSON.stringify({ access_token: 'downstream-api-token', expires_in: 300 }), {
