@@ -1,7 +1,7 @@
 {
   "name": "bizidashboard-mcp",
-  "version": "0.2.0",
-  "description": "MCP server exposing BiziDashboard's historical and analytical bike-share data (Zaragoza Bizi) as tools for LLM clients.",
+  "version": "0.2.1",
+  "description": "Model Context Protocol server for BiziDashboard's Zaragoza bike-share analytics: stations, history, occupancy, alerts, mobility, and rebalancing.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

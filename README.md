@@ -1,7 +1,7 @@
 # bizidashboard-mcp
 
-MCP server exposing [BiziDashboard](https://datosbizi.com)'s historical and analytical
-data for the Zaragoza Bizi bike-share system as tools for LLM clients.
+Model Context Protocol server for [BiziDashboard](https://datosbizi.com)'s Zaragoza
+bike-share analytics: stations, history, occupancy, alerts, mobility, and rebalancing.
 
 Unlike the official GBFS feed (which only exposes the current state of the system),
 BiziDashboard stores and analyzes history: rankings, occupancy patterns, mobility
