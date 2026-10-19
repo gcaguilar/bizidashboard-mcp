@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { mcpAuthMetadataRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js'
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
-import { DASHBOARD_SCOPE } from './operations.js'
+import { DASHBOARD_SCOPE, EXPORTS_SCOPE } from './operations.js'
 import { tools } from './tools.js'
 import { createOAuthProvider } from './oauth.js'
 import { getOAuthServerMetadata } from './oauth-proxy.js'
@@ -35,17 +35,29 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
   app.use(express.json({ limit: '1mb' }))
   app.use(express.urlencoded({ extended: false, limit: '1mb' }))
   const corsOrigins = getCorsOrigins()
+  // Browser clients (MCP Inspector, web connectors) send an Origin header.
+  // Requests without Origin (Claude, ChatGPT, curl) must always pass through.
+  // When MCP_CORS_ORIGINS is unset we answer `*` instead of rejecting: the
+  // server never relies on cookies or ambient credentials, so a wildcard does
+  // not enable cross-site request forgery. Discovery documents are public and
+  // always readable by browsers.
   app.use((req, res, next) => {
     const origin = req.get('origin')
     if (!origin) return next()
-    if (!corsOrigins.includes(origin)) {
+    const isMetadata = req.path.startsWith('/.well-known/')
+    const allowAll = isMetadata || corsOrigins.length === 0
+    if (!allowAll && !corsOrigins.includes(origin)) {
       return res.status(403).json({ error: 'Origin not allowed' })
     }
 
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Mcp-Session-Id')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Origin', allowAll ? '*' : origin)
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Authorization, Content-Type, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID',
+    )
+    res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id, WWW-Authenticate')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+    if (!allowAll) res.setHeader('Vary', 'Origin')
     if (req.method === 'OPTIONS') return res.sendStatus(204)
     next()
   })
@@ -74,7 +86,20 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     },
     resourceServerUrl,
     resourceName: 'BiziDashboard MCP Server',
+    scopesSupported: [DASHBOARD_SCOPE, EXPORTS_SCOPE],
   }))
+
+  // Some clients probe the bare /.well-known/oauth-protected-resource (without
+  // the resource path suffix). Serve the same document there.
+  app.get('/.well-known/oauth-protected-resource', (_req, res) => {
+    res.status(200).json({
+      resource: resourceServerUrl.href,
+      authorization_servers: [oauthMetadata.issuer],
+      scopes_supported: [DASHBOARD_SCOPE, EXPORTS_SCOPE],
+      resource_name: 'BiziDashboard MCP Server',
+      bearer_methods_supported: ['header'],
+    })
+  })
 
   app.get('/healthz', (_req, res) => res.status(200).send('ok'))
 
