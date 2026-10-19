@@ -96,3 +96,9 @@ test('unauthenticated /mcp returns 401 pointing at the resource metadata', async
   assert.match(header, /scope="read:dashboard"/)
 })
 
+test('healthz responds as plain text', async () => {
+  const response = await fetch(`${baseUrl}/healthz`)
+  assert.equal(response.status, 200)
+  assert.match(response.headers.get('content-type') ?? '', /text\/plain/)
+  assert.equal(await response.text(), 'ok')
+})

@@ -15,8 +15,10 @@ function getCorsOrigins(): string[] {
     .filter(Boolean)
 }
 
+const SERVER_VERSION = '0.2.1'
+
 function newMcpServer(): McpServer {
-  const server = new McpServer({ name: 'bizidashboard-mcp', version: '0.1.0' })
+  const server = new McpServer({ name: 'bizidashboard-mcp', version: SERVER_VERSION })
   for (const tool of tools) {
     server.registerTool(tool.name, {
       description: tool.description,
@@ -101,7 +103,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     })
   })
 
-  app.get('/healthz', (_req, res) => res.status(200).send('ok'))
+  app.get('/healthz', (_req, res) => res.status(200).type('text/plain').send('ok'))
 
   // Stateless Streamable HTTP: a fresh server+transport per request avoids
   // request-id collisions between concurrent callers and needs no session storage.
@@ -118,6 +120,11 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
 
   app.get('/mcp', bearerAuthMiddleware, (_req, res) => {
     res.status(405).json({ error: 'Method not allowed. This server runs in stateless mode; POST JSON-RPC requests to /mcp.' })
+  })
+
+  app.delete('/mcp', bearerAuthMiddleware, (_req, res) => {
+    // Stateless mode has no session to terminate; tell clients so instead of 404.
+    res.status(405).json({ error: 'Method not allowed. This server is stateless and does not keep MCP sessions.' })
   })
 
   // Malformed JSON bodies (and any other body-parser failure) must produce a
