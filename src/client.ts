@@ -122,7 +122,25 @@ export async function exchangeMcpTokenForApiToken(incomingToken: string, scopes:
   }
 
   if (!response.ok) {
-    throw new BiziApiError('Auth0 rejected the MCP token exchange for the DatosBizi API', 502, '/oauth/token')
+    // Surface Auth0's machine-readable error (never credentials or the request
+    // body) so an operator can tell invalid_client from a grant/scope problem
+    // without shell access to the container logs.
+    let detail = ''
+    try {
+      const failure = await response.json() as { error?: unknown, error_description?: unknown }
+      const code = typeof failure.error === 'string' ? failure.error : ''
+      const description = typeof failure.error_description === 'string'
+        ? failure.error_description.slice(0, 160)
+        : ''
+      detail = [code, description].filter(Boolean).join(': ')
+    } catch {
+      // Non-JSON error body: keep the generic message.
+    }
+    throw new BiziApiError(
+      `Auth0 rejected the MCP token exchange for the DatosBizi API${detail ? ` (${detail})` : ''}`,
+      502,
+      '/oauth/token',
+    )
   }
   const payload = await response.json() as Record<string, unknown>
   if (typeof payload.access_token !== 'string' || !payload.access_token) {
