@@ -73,8 +73,13 @@ still authenticates individually). See the README section
 4. Users paste the shared `client_id` under **Use your own OAuth client**
    (Claude) or the pre-defined OAuth client field (ChatGPT), secret empty.
 
-Alternatively enable CIMD in the tenant, import the AI clients' documents once,
-and deploy with `MCP_CIMD_ENABLED=true`.
+Alternatively enable CIMD in the tenant and import the AI clients' documents
+once; the server always advertises CIMD support.
+
+The authorization-server metadata does not advertise `registration_endpoint`:
+DCR is disabled on the tenant, and announcing it makes clients attempt
+`/oidc/register` and fail with `400 dynamic client registration is disabled`
+before falling back to a manual `client_id`.
 
 `BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
 HTTP requests to `/mcp` never send it upstream, even if it is present

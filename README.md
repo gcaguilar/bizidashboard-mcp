@@ -90,7 +90,7 @@ Then point your MCP client at the built entrypoint:
 | `MCP_AUTH0_CLIENT_ID` | **Required in production.** Client ID of the special Auth0 resource-server OBO client. |
 | `MCP_AUTH0_CLIENT_SECRET` | **Required in production.** Secret of that OBO client. Store only as a Coolify secret. |
 | `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. When unset, browser requests are answered with `Access-Control-Allow-Origin: *` (the server uses bearer tokens, never cookies, so no credentials are exposed); discovery documents are always public. |
-| `MCP_CIMD_ENABLED` | Set to `true` only after enabling **Client ID Metadata Document (CIMD) Registration** in Auth0 and importing the client documents. Adds `client_id_metadata_document_supported: true` to the authorization-server metadata. |
+| `MCP_CIMD_ENABLED` | Deprecated and ignored. The authorization-server metadata always advertises `client_id_metadata_document_supported: true`; enable **Client ID Metadata Document (CIMD) Registration** in Auth0 and import the AI client documents before relying on CIMD. |
 | `AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE` | Set to `true` only when Auth0 returns `iss` in authorization responses (tenant setting **Include Issuer in Authorization Responses**). Adds `authorization_response_iss_parameter_supported: true`, which gives ChatGPT a stable redirect URI. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
@@ -137,8 +137,9 @@ with their own account and gets their own token, but no Application is created.
 2. Applications → **Create Application → Import from URL**, once per AI client:
    `https://chatgpt.com/oauth/client.json` and Claude's published document
    (Claude Code: `https://claude.ai/oauth/claude-code-client-metadata`).
-3. Deploy with `MCP_CIMD_ENABLED=true`. Claude selects CIMD only when the
-   metadata also advertises `none` in `token_endpoint_auth_methods_supported`,
+3. Deploy. The authorization-server metadata always advertises
+   `client_id_metadata_document_supported: true`. Claude selects CIMD only when
+   the metadata also advertises `none` in `token_endpoint_auth_methods_supported`,
    which this server does.
 4. Disable Dynamic Client Registration.
 

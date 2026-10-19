@@ -9,7 +9,6 @@ export type OAuthServerMetadata = {
   authorization_endpoint: string
   token_endpoint: string
   revocation_endpoint: string
-  registration_endpoint: string
   jwks_uri: string
   introspection_endpoint: string
   grant_types_supported: string[]
@@ -63,7 +62,6 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
     authorization_endpoint: endpoints.authorizationUrl,
     token_endpoint: endpoints.tokenUrl,
     revocation_endpoint: endpoints.revocationUrl,
-    registration_endpoint: `${origin}/oidc/register`,
     jwks_uri: `${origin}/.well-known/jwks.json`,
     introspection_endpoint: `${origin}/oauth/introspect`,
     grant_types_supported: ['authorization_code', 'refresh_token'],
@@ -74,11 +72,11 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
     // Advertise the scopes this resource actually enforces so clients request
     // them instead of falling back to a token without read:dashboard.
     scopes_supported: ['read:dashboard', 'read:exports'],
-  }
-  // Only advertise these once Auth0 is configured accordingly; otherwise
-  // clients would pick a flow the tenant rejects instead of falling back to DCR.
-  if (env.MCP_CIMD_ENABLED === 'true') {
-    metadata.client_id_metadata_document_supported = true
+    // DCR is disabled on the tenant, so clients cannot register themselves.
+    // CIMD lets Claude/ChatGPT use their published client metadata document
+    // instead of asking every user for a client_id. Auth0 must have CIMD
+    // enabled and the AI client documents imported before deployment.
+    client_id_metadata_document_supported: true,
   }
   if (env.AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE === 'true') {
     metadata.authorization_response_iss_parameter_supported = true
