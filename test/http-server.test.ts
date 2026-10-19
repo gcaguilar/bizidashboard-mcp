@@ -70,6 +70,20 @@ test('metadata remains readable from a browser origin', async () => {
   assert.equal(response.headers.get('access-control-allow-origin'), '*')
 })
 
+test('malformed JSON returns a JSON-RPC parse error, not HTML', async () => {
+  const response = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+    body: '{"jsonrpc":',
+  })
+  assert.equal(response.status, 400)
+  assert.match(response.headers.get('content-type') ?? '', /application\/json/)
+  const body = await response.json() as { jsonrpc: string, error: { code: number }, id: null }
+  assert.equal(body.jsonrpc, '2.0')
+  assert.equal(body.error.code, -32700)
+  assert.equal(body.id, null)
+})
+
 test('unauthenticated /mcp returns 401 pointing at the resource metadata', async () => {
   const response = await fetch(`${baseUrl}/mcp`, {
     method: 'POST',

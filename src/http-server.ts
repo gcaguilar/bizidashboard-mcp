@@ -120,5 +120,21 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     res.status(405).json({ error: 'Method not allowed. This server runs in stateless mode; POST JSON-RPC requests to /mcp.' })
   })
 
+  // Malformed JSON bodies (and any other body-parser failure) must produce a
+  // JSON-RPC parse error instead of Express' default HTML error page.
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) return next(err)
+    const status = typeof (err as { status?: number }).status === 'number' ? (err as { status: number }).status : 400
+    const isParseError = err instanceof SyntaxError
+    res.status(status).json({
+      jsonrpc: '2.0',
+      error: {
+        code: isParseError ? -32700 : -32600,
+        message: isParseError ? 'Parse error: request body is not valid JSON' : 'Invalid request',
+      },
+      id: null,
+    })
+  })
+
   return app
 }
