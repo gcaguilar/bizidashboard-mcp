@@ -31,6 +31,9 @@
     "dev": "tsc -p tsconfig.json --watch",
     "start": "node dist/index.js",
     "start:http": "node dist/http-index.js",
+    "verify:local": "node scripts/verify-local.mjs",
+    "verify:headers": "node scripts/verify-headers.mjs",
+    "verify:protocol": "node scripts/verify-protocol.mjs",
     "test": "npm run build && node --test --test-concurrency=1 --experimental-strip-types test/oauth.test.ts test/oauth-proxy.test.ts test/authorization.test.ts test/tools.test.ts test/http-server.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
