@@ -40,6 +40,7 @@ test('advertises Auth0 as the authorization server', () => {
     response_types_supported: ['code'],
     response_modes_supported: ['query'],
     code_challenge_methods_supported: ['S256'],
+    scopes_supported: ['read:dashboard', 'read:exports'],
   })
 })
 

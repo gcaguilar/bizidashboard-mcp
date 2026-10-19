@@ -17,6 +17,7 @@ export type OAuthServerMetadata = {
   response_types_supported: string[]
   response_modes_supported: string[]
   code_challenge_methods_supported: string[]
+  scopes_supported: string[]
 }
 
 function requireAuth0Domain(env: NodeJS.ProcessEnv): string {
@@ -55,7 +56,7 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
   const domain = requireAuth0Domain(env)
   const origin = `https://${domain}`
   const endpoints = getOAuthEndpoints(env)
-  return {
+  const metadata: OAuthServerMetadata = {
     issuer: `${origin}/`,
     authorization_endpoint: endpoints.authorizationUrl,
     token_endpoint: endpoints.tokenUrl,
@@ -68,5 +69,9 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
     response_types_supported: ['code'],
     response_modes_supported: ['query'],
     code_challenge_methods_supported: ['S256'],
+    // Advertise the scopes this resource actually enforces so clients request
+    // them instead of falling back to a token without read:dashboard.
+    scopes_supported: ['read:dashboard', 'read:exports'],
   }
+  return metadata
 }
