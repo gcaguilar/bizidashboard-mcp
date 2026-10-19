@@ -44,6 +44,21 @@ test('advertises Auth0 as the authorization server', () => {
   })
 })
 
+test('advertises CIMD and RFC 9207 support only when the tenant is configured for it', () => {
+  const base = { AUTH0_DOMAIN: 'tenant.auth0.com', MCP_AUTH0_AUDIENCE: 'https://mcp.datosbizi.com/mcp' }
+  const off = getOAuthServerMetadata(base)
+  assert.equal(off.client_id_metadata_document_supported, undefined)
+  assert.equal(off.authorization_response_iss_parameter_supported, undefined)
+
+  const on = getOAuthServerMetadata({
+    ...base,
+    MCP_CIMD_ENABLED: 'true',
+    AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE: 'true',
+  })
+  assert.equal(on.client_id_metadata_document_supported, true)
+  assert.equal(on.authorization_response_iss_parameter_supported, true)
+})
+
 test('requires an MCP audience when no legacy configuration exists', () => {
   assert.throws(
     () => getOAuthEndpoints({ AUTH0_DOMAIN: 'tenant.auth0.com' }),

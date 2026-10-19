@@ -18,6 +18,8 @@ export type OAuthServerMetadata = {
   response_modes_supported: string[]
   code_challenge_methods_supported: string[]
   scopes_supported: string[]
+  client_id_metadata_document_supported?: boolean
+  authorization_response_iss_parameter_supported?: boolean
 }
 
 function requireAuth0Domain(env: NodeJS.ProcessEnv): string {
@@ -72,6 +74,14 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
     // Advertise the scopes this resource actually enforces so clients request
     // them instead of falling back to a token without read:dashboard.
     scopes_supported: ['read:dashboard', 'read:exports'],
+  }
+  // Only advertise these once Auth0 is configured accordingly; otherwise
+  // clients would pick a flow the tenant rejects instead of falling back to DCR.
+  if (env.MCP_CIMD_ENABLED === 'true') {
+    metadata.client_id_metadata_document_supported = true
+  }
+  if (env.AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE === 'true') {
+    metadata.authorization_response_iss_parameter_supported = true
   }
   return metadata
 }
