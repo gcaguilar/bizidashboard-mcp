@@ -66,6 +66,14 @@ Then point your MCP client at the built entrypoint:
    Compatibility Profile in the tenant. Claude and ChatGPT then register their
    own public clients; users do not receive an OAuth secret.
 
+   **The API must also accept third-party (DCR) clients.** In **Applications →
+   APIs → the MCP API → Settings → Default Permissions for Third Party Apps**,
+   enable **User-Delegated Access** and select `read:dashboard` and
+   `read:exports`. Without this, every connector fails at `/authorize` with
+   `Client "<id>" is not authorized to access resource server`. Keep the tenant
+   below its Applications limit (10 on the Free plan): DCR then returns
+   `too_many_entities` and no client registration succeeds.
+
 2. In **Applications → APIs → the MCP API**, select **Add Application** to
    create its **Custom API Client**. Grant that client user-delegated access to
    `https://api.datosbizi.com` and enable **On-Behalf-Of Token Exchange**. It
@@ -81,7 +89,9 @@ Then point your MCP client at the built entrypoint:
 | `API_AUTH0_AUDIENCE` | **Required in production.** Existing DatosBizi API identifier, e.g. `https://api.datosbizi.com`. OBO tokens are issued for this audience before the MCP calls the API. |
 | `MCP_AUTH0_CLIENT_ID` | **Required in production.** Client ID of the special Auth0 resource-server OBO client. |
 | `MCP_AUTH0_CLIENT_SECRET` | **Required in production.** Secret of that OBO client. Store only as a Coolify secret. |
-| `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. |
+| `MCP_CORS_ORIGINS` | Optional comma-separated browser origins allowed to call the HTTP MCP, e.g. `https://datosbizi.com`. When unset, browser requests are answered with `Access-Control-Allow-Origin: *` (the server uses bearer tokens, never cookies, so no credentials are exposed); discovery documents are always public. |
+| `MCP_CIMD_ENABLED` | Set to `true` only after enabling **Client ID Metadata Document (CIMD) Registration** in Auth0 and importing the client documents. Adds `client_id_metadata_document_supported: true` to the authorization-server metadata. |
+| `AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE` | Set to `true` only when Auth0 returns `iss` in authorization responses (tenant setting **Include Issuer in Authorization Responses**). Adds `authorization_response_iss_parameter_supported: true`, which gives ChatGPT a stable redirect URI. |
 | `BASE_URL` | _(optional)_ The public URL of this server (e.g., `https://mcp.yourdomain.com`). Used to construct OAuth metadata URLs. Defaults to `http://localhost:8787`. |
 | `PORT` | _(optional)_ HTTP port. Default `8787`. |
 
@@ -91,6 +101,52 @@ Do not set `AUTH0_AUDIENCES`, `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS`,
 `BIZI_ALLOWED_API_HOSTS` to an explicit comma-separated allowlist (normally
 `datosbizi.com`) so authenticated tokens are never forwarded to an unintended
 origin.
+
+### Running without DCR (shared client, any number of users)
+
+DCR creates one Auth0 Application per connector *installation*, so a free
+tenant (10 Applications) runs out after a handful of users. A pre-registered or
+CIMD client is **one per AI product for all users**: each user still signs in
+with their own account and gets their own token, but no Application is created.
+
+**Option A — one shared public client (works today, no user-side registration).**
+
+1. Auth0 → Applications → **Create Application** → **Single Page Application**.
+   Do not use *Regular Web Application*: that type is confidential and would
+   force a client secret into every user's connector form.
+2. Set **Allowed Callback URLs**:
+   `https://claude.ai/api/mcp/auth_callback`,
+   `https://chatgpt.com/connector_platform_oauth_redirect`,
+   `http://localhost/callback`, `http://127.0.0.1/callback`.
+   If ChatGPT shows a `https://chatgpt.com/connector/oauth/<id>` redirect in the
+   connector page instead, add that exact URI too (it is used when the
+   authorization server does not advertise RFC 9207 `iss`).
+3. **Grant types**: Authorization Code, Refresh Token. **Authentication
+   Method**: `none` (public client with PKCE). Authorize the app for the MCP API
+   with `read:dashboard` and `read:exports` (per-app client grant, or the API's
+   Default Permissions). Enable the login connection at domain level.
+4. Disable **Dynamic Client Registration** in the tenant.
+5. Users connect with **Use your own OAuth client** (Claude) or the
+   pre-defined OAuth client field (ChatGPT) and paste this `client_id`; leave
+   the secret empty.
+
+**Option B — CIMD (no fields for users to fill).**
+
+1. Auth0 → Settings → Advanced → enable
+   **Client ID Metadata Document (CIMD) Registration**.
+2. Applications → **Create Application → Import from URL**, once per AI client:
+   `https://chatgpt.com/oauth/client.json` and Claude's published document
+   (Claude Code: `https://claude.ai/oauth/claude-code-client-metadata`).
+3. Deploy with `MCP_CIMD_ENABLED=true`. Claude selects CIMD only when the
+   metadata also advertises `none` in `token_endpoint_auth_methods_supported`,
+   which this server does.
+4. Disable Dynamic Client Registration.
+
+CIMD clients are third-party applications: they need an API access policy
+(client grant) for the MCP API and fail if the tenant has active Rules.
+ChatGPT's CIMD prefers `private_key_jwt`, which Auth0 only allows on Enterprise
+plans — verify the import works on a free tenant, otherwise use Option A for
+ChatGPT.
 
 For local authenticated use, enable Device Authorization for a local DatosBizi
 Auth0 client and run `bizidashboard-mcp-login` with `AUTH0_DOMAIN`,

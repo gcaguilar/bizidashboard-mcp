@@ -41,6 +41,41 @@ For public connectors leave `AUTH0_ACCESS_TOKEN_ALLOWED_CLIENT_IDS` unset: DCR c
 a different client for each connector installation. Do not configure the old OAuth
 proxy (`OAUTH_PROXY_ORIGIN`) or static audience lists on this deployment.
 
+Two tenant settings break connectors even when DCR is enabled:
+
+- **Default Permissions for Third Party Apps** on the MCP API
+  (**Settings → Default Permissions for Third Party Apps**): enable
+  **User-Delegated Access** with `read:dashboard` and `read:exports`. Otherwise
+  `/authorize` returns `Client "<id>" is not authorized to access resource server`.
+- **Applications quota** (10 on the Free plan). Once it is reached, DCR replies
+  `403 too_many_entities` and Claude/ChatGPT cannot register a client at all.
+  Delete unused applications, or disable DCR and pre-register one client per
+  connector:
+  `https://claude.ai/api/mcp/auth_callback` and
+  `https://chatgpt.com/connector_platform_oauth_redirect` (public, PKCE, no secret).
+
+### Without DCR, for any number of users
+
+DCR creates one Application per connector installation; a pre-registered client
+or a CIMD client is one per AI product and is shared by every user (each user
+still authenticates individually). See the README section
+**"Running without DCR"** for the full procedure. Short version:
+
+1. Create one **Single Page Application** (public, no client secret) with
+   callback URLs `https://claude.ai/api/mcp/auth_callback`,
+   `https://chatgpt.com/connector_platform_oauth_redirect`,
+   `http://localhost/callback`, `http://127.0.0.1/callback` (and the exact
+   `https://chatgpt.com/connector/oauth/<id>` URI if ChatGPT displays one).
+2. Authorize that app for the MCP API with `read:dashboard` and
+   `read:exports`; authentication method `none`, PKCE required.
+3. Disable Dynamic Client Registration so nothing consumes the Applications
+   quota again.
+4. Users paste the shared `client_id` under **Use your own OAuth client**
+   (Claude) or the pre-defined OAuth client field (ChatGPT), secret empty.
+
+Alternatively enable CIMD in the tenant, import the AI clients' documents once,
+and deploy with `MCP_CIMD_ENABLED=true`.
+
 `BIZI_PUBLIC_API_KEY` is a local stdio backward-compatibility option only. Incoming
 HTTP requests to `/mcp` never send it upstream, even if it is present
 in the deployment environment. Those requests act solely as the signed-in bearer-token
@@ -87,7 +122,14 @@ After redeploying, verify:
 ```bash
 curl -fsS https://mcp.datosbizi.com/healthz
 curl -fsS https://mcp.datosbizi.com/.well-known/oauth-protected-resource
+curl -fsS https://mcp.datosbizi.com/.well-known/oauth-protected-resource/mcp
+# Browser preflight must not be rejected:
+curl -si -X OPTIONS https://mcp.datosbizi.com/mcp \
+  -H 'Origin: https://claude.ai' -H 'Access-Control-Request-Method: POST' | head -1
 ```
+
+Both metadata documents must list `read:dashboard` and `read:exports` in
+`scopes_supported`. The preflight must return `204` (not `403`).
 
 Then use an actual DatosBizi access token to run `initialize`, `tools/list`, and
 one `tools/call`. Verify a `read:dashboard` token succeeds for a basic tool and gets a
