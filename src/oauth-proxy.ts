@@ -72,11 +72,12 @@ export function getOAuthServerMetadata(env: NodeJS.ProcessEnv = process.env): OA
     // Advertise the scopes this resource actually enforces so clients request
     // them instead of falling back to a token without read:dashboard.
     scopes_supported: ['read:dashboard', 'read:exports'],
-    // DCR is disabled on the tenant, so clients cannot register themselves.
-    // CIMD lets Claude/ChatGPT use their published client metadata document
-    // instead of asking every user for a client_id. Auth0 must have CIMD
-    // enabled and the AI client documents imported before deployment.
-    client_id_metadata_document_supported: true,
+  }
+  // CIMD is a second step: enable it in Auth0, import the AI client documents,
+  // then deploy with MCP_CIMD_ENABLED=true. Do not advertise it before that,
+  // or clients pick a flow the tenant rejects.
+  if (env.MCP_CIMD_ENABLED === 'true') {
+    metadata.client_id_metadata_document_supported = true
   }
   if (env.AUTH0_ISSUER_IN_AUTHORIZATION_RESPONSE === 'true') {
     metadata.authorization_response_iss_parameter_supported = true

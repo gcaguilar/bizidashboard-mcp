@@ -82,6 +82,26 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     resourceMetadataUrl,
   })
 
+  // `requiredScopes` only contains read:dashboard because that is the minimum
+  // needed to call /mcp. Connectors read the RFC 6750 challenge to decide which
+  // scopes to request, so advertise every scope this resource supports without
+  // forcing read:exports on basic calls.
+  const advertisedScopes = [DASHBOARD_SCOPE, EXPORTS_SCOPE].join(' ')
+  function bearerAuthWithAdvertisedScopes(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) {
+    const setHeader = res.setHeader.bind(res)
+    res.setHeader = function (name: string, value: number | string | readonly string[]) {
+      const advertised = String(name).toLowerCase() === 'www-authenticate' && typeof value === 'string'
+        ? value.replace(/scope="[^"]*"/, `scope="${advertisedScopes}"`)
+        : value
+      return setHeader(name, advertised)
+    } as express.Response['setHeader']
+    bearerAuthMiddleware(req, res, next)
+  }
+
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: {
       ...oauthMetadata,
@@ -107,7 +127,7 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
 
   // Stateless Streamable HTTP: a fresh server+transport per request avoids
   // request-id collisions between concurrent callers and needs no session storage.
-  app.post('/mcp', bearerAuthMiddleware, async (req, res) => {
+  app.post('/mcp', bearerAuthWithAdvertisedScopes, async (req, res) => {
     const server = newMcpServer()
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {
@@ -118,11 +138,11 @@ export function createHttpServer(options: { oauthProvider?: ReturnType<typeof cr
     await transport.handleRequest(req, res, req.body)
   })
 
-  app.get('/mcp', bearerAuthMiddleware, (_req, res) => {
+  app.get('/mcp', bearerAuthWithAdvertisedScopes, (_req, res) => {
     res.status(405).json({ error: 'Method not allowed. This server runs in stateless mode; POST JSON-RPC requests to /mcp.' })
   })
 
-  app.delete('/mcp', bearerAuthMiddleware, (_req, res) => {
+  app.delete('/mcp', bearerAuthWithAdvertisedScopes, (_req, res) => {
     // Stateless mode has no session to terminate; tell clients so instead of 404.
     res.status(405).json({ error: 'Method not allowed. This server is stateless and does not keep MCP sessions.' })
   })

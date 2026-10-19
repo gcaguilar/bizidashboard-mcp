@@ -73,8 +73,8 @@ still authenticates individually). See the README section
 4. Users paste the shared `client_id` under **Use your own OAuth client**
    (Claude) or the pre-defined OAuth client field (ChatGPT), secret empty.
 
-Alternatively enable CIMD in the tenant and import the AI clients' documents
-once; the server always advertises CIMD support.
+Alternatively enable CIMD in the tenant, import the AI clients' documents once,
+and deploy with `MCP_CIMD_ENABLED=true`.
 
 The authorization-server metadata does not advertise `registration_endpoint`:
 DCR is disabled on the tenant, and announcing it makes clients attempt

@@ -93,7 +93,7 @@ test('unauthenticated /mcp returns 401 pointing at the resource metadata', async
   assert.equal(response.status, 401)
   const header = response.headers.get('www-authenticate') ?? ''
   assert.match(header, /resource_metadata="http:\/\/localhost:8787\/\.well-known\/oauth-protected-resource\/mcp"/)
-  assert.match(header, /scope="read:dashboard"/)
+  assert.match(header, /scope="read:dashboard read:exports"/)
 })
 
 test('healthz responds as plain text', async () => {
